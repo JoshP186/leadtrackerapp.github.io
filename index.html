@@ -28,6 +28,7 @@
   button.subtle:hover{background:#f3f4f6}
   button.danger{color:var(--red);border-color:#fecaca}
   button.sm{padding:6px 10px;font-size:13px}
+  button.warn{color:#b45309}
   button.icon{padding:7px}
   button:disabled{opacity:.5;cursor:default}
   input,select,textarea{font:inherit;color:var(--ink)}
@@ -194,8 +195,7 @@
   <div class="spacer"></div>
   <button class="subtle" id="btnAssistant"><span data-icon="spark"></span><span class="lbl">Assistant</span></button>
   <div class="user" id="userBox"></div>
-  <div id="gsignin"></div>
-  <button class="subtle" id="btnSignIn"><span data-icon="user"></span><span class="lbl">Sign in</span></button>
+  <button class="subtle" id="btnSignIn"><span data-icon="user"></span><span class="lbl">Sign in with Google</span></button>
   <button class="subtle icon" id="btnSettings" title="Settings" aria-label="Settings"><span data-icon="gear"></span></button>
 </div></header>
 
@@ -210,6 +210,7 @@
       <details class="menu" id="moreMenu">
         <summary class="btn icon" title="More" aria-label="More"><span data-icon="more"></span></summary>
         <div class="menu-pop">
+          <button id="btnSheets" class="hidden"><span data-icon="sheet"></span>Open in Google Sheets</button>
           <button id="btnExport"><span data-icon="download"></span>Export to spreadsheet (CSV)</button>
           <button id="btnBackup"><span data-icon="save"></span>Back up all leads</button>
           <button id="btnRestore"><span data-icon="restore"></span>Restore from backup</button>
@@ -306,7 +307,6 @@
         <option value="Llama-3.2-3B-Instruct-q4f16_1-MLC">Smarter: Llama 3.2 3B (about 2.3 GB)</option>
       </select>
     </label>
-    <label class="fld">Google Client ID (for Sign in with Google)<input id="setClientId" placeholder="xxxxxxxx.apps.googleusercontent.com"></label>
     <div class="note" id="googleNote"></div>
   </div>
   <div class="df"><div class="spacer"></div><button type="button" data-close>Cancel</button><button type="button" class="primary" id="btnSaveSettings">Save</button></div>
@@ -358,6 +358,7 @@ const ICONS = {
   save:'<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>',
   restore:'<polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>',
   refresh:'<polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>',
+  sheet:'<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/>',
   send:'<line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>'
 };
 function ic(name){ const t = document.createElement('template'); t.innerHTML = `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name] || ''}</svg>`; return t.content.firstChild; }
@@ -384,12 +385,16 @@ function tx(mode, fn){
   }));
 }
 const dbAll = () => tx('readonly', s => s.getAll());
-const dbPut = lead => tx('readwrite', s => s.put(lead));
-const dbDel = id => tx('readwrite', s => s.delete(id));
+const dbAllRaw = dbAll;
+const dbPutRaw = lead => tx('readwrite', s => s.put(lead));
+const dbDelRaw = id => tx('readwrite', s => s.delete(id));
+// Every change made in the app also gets queued for syncing to Google Drive.
+async function dbPut(lead){ await dbPutRaw(lead); if (tombstones[lead.id]){ delete tombstones[lead.id]; lsSet('leadsnap.deleted', tombstones); } scheduleSync(); }
+async function dbDel(id){ tombstones[id] = Date.now(); lsSet('leadsnap.deleted', tombstones); await dbDelRaw(id); scheduleSync(); }
 function lsGet(k, def){ try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : def; } catch(e){ return def; } }
 function lsSet(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} }
 
-let settings = Object.assign({ days: 3, googleClientId: '', aiModel: 'Llama-3.2-1B-Instruct-q4f16_1-MLC', sort: 'soonest' }, lsGet('leadsnap.settings', {}));
+let settings = Object.assign({ days: 3, aiModel: 'Llama-3.2-1B-Instruct-q4f16_1-MLC', sort: 'soonest' }, lsGet('leadsnap.settings', {}));
 let currentUser = lsGet('leadsnap.user', null);
 let leads = [];
 let statusFilter = 'all';
@@ -1062,16 +1067,19 @@ function downloadBlob(blob, name){
   document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
 }
 function closeMenu(){ $('#moreMenu').open = false; }
-$('#btnExport').addEventListener('click', () => {
-  closeMenu();
-  if (!leads.length){ toast('No leads to export yet'); return; }
+function buildCsv(){
   const cols = ['Name','Company','Title','Email','Phone','Website','Card type','Next meeting or call','Done','Status','Notes','Date added'];
   const q = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
   const label = { done: 'Done', soon: 'Coming up', overdue: 'Overdue', open: 'Open' };
   const rows = leads.slice().sort(SORTS[settings.sort] || SORTS.soonest).map(l => [l.name, l.company, l.title, l.email, l.phone, l.website, l.cardType,
     l.meeting ? new Date(l.meeting).toLocaleString() : '', l.done ? 'TRUE' : 'FALSE', label[leadStatus(l)], l.notes,
     l.created ? new Date(l.created).toLocaleDateString() : ''].map(q).join(','));
-  downloadBlob(new Blob(['\ufeff' + [cols.map(q).join(','), ...rows].join('\r\n')], { type: 'text/csv' }), 'leadtracker-leads.csv');
+  return [cols.map(q).join(','), ...rows].join('\r\n');
+}
+$('#btnExport').addEventListener('click', () => {
+  closeMenu();
+  if (!leads.length){ toast('No leads to export yet'); return; }
+  downloadBlob(new Blob(['\ufeff' + buildCsv()], { type: 'text/csv' }), 'leadtracker-leads.csv');
 });
 $('#btnBackup').addEventListener('click', () => {
   closeMenu();
@@ -1086,65 +1094,232 @@ $('#fileRestore').addEventListener('change', async e => {
     const list = Array.isArray(data) ? data : data.leads;
     if (!Array.isArray(list)) throw new Error('bad file');
     if (!confirm(`Add ${list.length} leads from this backup? Leads that already exist will be replaced by the backup copy.`)) return;
-    for (const l of list) if (l && l.id) await dbPut(l);
+    const now = Date.now();
+    for (const l of list) if (l && l.id) await dbPut(Object.assign({}, l, { updated: now }));
     await load(); toast(`Restored ${list.length} leads`);
   } catch(err){ toast('That file isn’t a LeadTracker backup'); }
 });
 document.addEventListener('click', e => { if (!e.target.closest('#moreMenu')) closeMenu(); });
 
-/* ---------------- Google sign-in ---------------- */
-function decodeJwt(t){
-  const b = t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
-  const bin = atob(b + '='.repeat((4 - b.length % 4) % 4));
-  return JSON.parse(decodeURIComponent(bin.split('').map(c => '%' + c.charCodeAt(0).toString(16).padStart(2, '0')).join('')));
+/* ---------------- Google sign-in & Drive sync ---------------- */
+// Leads sync through one file in the user's own Google Drive ("LeadTracker data.json").
+// The app only asks for access to files it creates itself (drive.file), and there is no server.
+const GOOGLE_CLIENT_ID = '68368974453-la5km8m6qv3k9iu5ehq0p32suj2af1gi.apps.googleusercontent.com';
+const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+const SCOPES = 'openid email profile ' + DRIVE_SCOPE;
+const DATA_FILE = 'LeadTracker data.json';
+let tokenClient = null;
+let gToken = null, gTokenExp = 0;
+try { const t = JSON.parse(sessionStorage.getItem('leadsnap.token') || 'null'); if (t && t.exp > Date.now()){ gToken = t.token; gTokenExp = t.exp; } } catch(e){}
+let syncState = Object.assign({ fileId: null, sheetId: null, last: 0 }, lsGet('leadsnap.sync', {}));
+let tombstones = lsGet('leadsnap.deleted', {});
+let syncing = false, syncAgain = false, syncTimer = null, syncStatus = 'idle', syncError = '';
+
+const tokenValid = () => gToken && Date.now() < gTokenExp - 60000;
+async function initGoogle(){
+  if (location.protocol === 'file:') throw new Error('Google sign-in only works from the app’s web address, not from a downloaded file');
+  if (tokenClient) return;
+  await loadScript('https://accounts.google.com/gsi/client');
+  tokenClient = google.accounts.oauth2.initTokenClient({ client_id: GOOGLE_CLIENT_ID, scope: SCOPES, callback: () => {} });
+}
+// Must be called from a click (it opens Google's popup).
+async function getToken(){
+  if (tokenValid()) return gToken;
+  await initGoogle();
+  return new Promise((res, rej) => {
+    tokenClient.callback = r => {
+      if (r.error){ rej(new Error(r.error_description || r.error)); return; }
+      if (!google.accounts.oauth2.hasGrantedAllScopes(r, DRIVE_SCOPE)){ rej(new Error('LeadTracker needs Google Drive access to sync. Please allow it when you sign in.')); return; }
+      gToken = r.access_token; gTokenExp = Date.now() + (Number(r.expires_in) || 3600) * 1000;
+      try { sessionStorage.setItem('leadsnap.token', JSON.stringify({ token: gToken, exp: gTokenExp })); } catch(e){}
+      res(gToken);
+    };
+    tokenClient.error_callback = e => rej(new Error(e && e.type === 'popup_closed' ? 'The Google window was closed' : e && e.type === 'popup_failed_to_open' ? 'Your browser blocked the Google popup. Allow popups for this site and try again.' : 'Google sign-in failed'));
+    tokenClient.requestAccessToken(currentUser ? { prompt: '', login_hint: currentUser.email } : { prompt: 'consent' });
+  });
+}
+async function gfetch(url, opts = {}){
+  const r = await fetch(url, Object.assign({}, opts, { headers: Object.assign({ Authorization: 'Bearer ' + gToken }, opts.headers || {}) }));
+  if (r.status === 401){ gToken = null; try { sessionStorage.removeItem('leadsnap.token'); } catch(e){} throw new Error('auth'); }
+  if (!r.ok){ let msg = ''; try { msg = (await r.json()).error.message; } catch(e){} throw new Error('Google Drive error ' + r.status + (msg ? ': ' + msg : '')); }
+  return r;
+}
+function multipartBody(meta, content, type){
+  const b = 'lt' + Math.random().toString(36).slice(2);
+  return { boundary: b, body: `--${b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${b}\r\nContent-Type: ${type}\r\n\r\n${content}\r\n--${b}--` };
+}
+async function findDataFile(){
+  if (syncState.fileId){
+    try {
+      const j = await (await gfetch(`https://www.googleapis.com/drive/v3/files/${syncState.fileId}?fields=id,trashed`)).json();
+      if (!j.trashed) return j.id;
+    } catch(e){ if (e.message === 'auth') throw e; }
+  }
+  const q = encodeURIComponent(`name='${DATA_FILE}' and trashed=false`);
+  const j = await (await gfetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,modifiedTime)&orderBy=modifiedTime%20desc&spaces=drive`)).json();
+  return j.files && j.files[0] ? j.files[0].id : null;
+}
+async function writeDataFile(fileId, obj){
+  const body = JSON.stringify(obj);
+  if (fileId){
+    await gfetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body });
+    return fileId;
+  }
+  const m = multipartBody({ name: DATA_FILE, mimeType: 'application/json', description: 'LeadTracker keeps your leads here so they sync between devices. Please don’t edit or delete it.' }, body, 'application/json');
+  const r = await gfetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', { method: 'POST', headers: { 'Content-Type': `multipart/related; boundary=${m.boundary}` }, body: m.body });
+  return (await r.json()).id;
+}
+const stamp = l => l.updated || l.created || 0;
+
+// Merge this device's leads with the copy in Drive: newest edit of each lead wins, deletions carry over.
+async function syncNow(interactive){
+  if (!currentUser) return;
+  if (syncing){ syncAgain = true; return; }
+  syncing = true;
+  try {
+    if (!tokenValid()){
+      if (!interactive){ setSync('needs'); return; }
+      await getToken();
+    }
+    setSync('syncing');
+    const fileId = await findDataFile();
+    let remote = { leads: [], deleted: {} };
+    if (fileId){ try { remote = await (await gfetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`)).json() || remote; } catch(e){ if (e.message === 'auth') throw e; } }
+    const local = await dbAllRaw();
+    const tomb = Object.assign({}, remote.deleted || {});
+    for (const [id, t] of Object.entries(tombstones)) tomb[id] = Math.max(tomb[id] || 0, t);
+    const best = new Map();
+    for (const l of [...(remote.leads || []), ...local]){
+      if (!l || !l.id) continue;
+      const cur = best.get(l.id);
+      if (!cur || stamp(l) > stamp(cur)) best.set(l.id, l);
+    }
+    const merged = [...best.values()].filter(l => !(tomb[l.id] && tomb[l.id] >= stamp(l)));
+    const keep = new Set(merged.map(l => l.id));
+    const localById = new Map(local.map(l => [l.id, l]));
+    for (const l of merged){ const cur = localById.get(l.id); if (!cur || stamp(cur) !== stamp(l)) await dbPutRaw(l); }
+    for (const l of local) if (!keep.has(l.id)) await dbDelRaw(l.id);
+    const cutoff = Date.now() - 180 * 864e5;
+    for (const id of Object.keys(tomb)) if (tomb[id] < cutoff) delete tomb[id];
+    syncState.fileId = await writeDataFile(fileId, { app: 'LeadTracker', version: 2, updated: Date.now(), leads: merged, deleted: tomb });
+    tombstones = tomb; lsSet('leadsnap.deleted', tombstones);
+    syncState.last = Date.now(); lsSet('leadsnap.sync', syncState);
+    leads = merged; render();
+    setSync('ok');
+  } catch(e){
+    if (e.message === 'auth') setSync('needs');
+    else { setSync('error', e.message); if (interactive) toast(e.message); }
+  } finally {
+    syncing = false;
+    if (syncAgain){ syncAgain = false; syncNow(false); }
+  }
+}
+function scheduleSync(){
+  if (!currentUser) return;
+  clearTimeout(syncTimer);
+  if (!tokenValid()){ setSync('pending'); return; }
+  setSync('pending');
+  syncTimer = setTimeout(() => syncNow(false), 1500);
+}
+function setSync(state, err){
+  syncStatus = state; syncError = err || '';
+  const b = $('#syncBtn'); if (!b) return;
+  const text = {
+    idle: 'Sync', ok: 'Synced ' + (syncState.last ? new Date(syncState.last).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : ''),
+    syncing: 'Syncing…', needs: 'Tap to sync', pending: tokenValid() ? 'Saving…' : 'Not synced, tap to sync', error: 'Sync failed, retry'
+  }[state] || 'Sync';
+  b.lastChild.textContent = text;
+  b.title = state === 'error' ? syncError : 'Sync with Google Drive';
+  b.classList.toggle('warn', state === 'error' || (state === 'pending' && !tokenValid()));
+}
+
+async function signIn(){
+  try {
+    await getToken();
+    const p = await (await gfetch('https://www.googleapis.com/oauth2/v3/userinfo')).json();
+    if (currentUser && currentUser.email !== p.email){ syncState = { fileId: null, sheetId: null, last: 0 }; lsSet('leadsnap.sync', syncState); }
+    currentUser = { name: p.name, email: p.email, picture: p.picture };
+    lsSet('leadsnap.user', currentUser);
+    renderUser(); toast('Signed in as ' + p.email);
+    await syncNow(true);
+  } catch(e){ toast(e.message === 'auth' ? 'Google sign-in failed, please try again' : e.message); }
+}
+async function signOut(){
+  if (!confirm('Sign out of Google? Your leads stay saved in your Google Drive.')) return;
+  const wipe = confirm('Also remove your leads from this device?\n\nOK: remove them (good for a shared computer)\nCancel: keep them on this device');
+  try { if (gToken) google.accounts.oauth2.revoke(gToken, () => {}); } catch(e){}
+  currentUser = null; gToken = null; gTokenExp = 0;
+  try { sessionStorage.removeItem('leadsnap.token'); } catch(e){}
+  lsSet('leadsnap.user', null);
+  syncState = { fileId: null, sheetId: null, last: 0 }; lsSet('leadsnap.sync', syncState);
+  if (wipe){
+    for (const l of await dbAllRaw()) await dbDelRaw(l.id);
+    tombstones = {}; lsSet('leadsnap.deleted', tombstones);
+  }
+  renderUser(); await load(); toast('Signed out');
 }
 function renderUser(){
   const box = $('#userBox');
+  $('#btnSheets').classList.toggle('hidden', !currentUser);
   if (currentUser){
-    box.replaceChildren(
-      currentUser.picture ? el('img', { src: currentUser.picture, alt: '', referrerpolicy: 'no-referrer' }) : null,
-      el('span', { class: 'lbl' }, currentUser.name || currentUser.email),
-      el('button', { class: 'subtle sm', onclick: signOut }, 'Sign out'));
-    $('#btnSignIn').classList.add('hidden'); $('#gsignin').replaceChildren();
-  } else { box.replaceChildren(); $('#btnSignIn').classList.remove('hidden'); }
-}
-function signOut(){
-  currentUser = null; lsSet('leadsnap.user', null);
-  try { google.accounts.id.disableAutoSelect(); } catch(e){}
-  renderUser(); setupGoogle();
-}
-async function setupGoogle(){
-  if (currentUser || !settings.googleClientId || location.protocol === 'file:') return;
-  try {
-    await loadScript('https://accounts.google.com/gsi/client');
-    google.accounts.id.initialize({ client_id: settings.googleClientId, callback: r => {
-      const p = decodeJwt(r.credential);
-      currentUser = { name: p.name, email: p.email, picture: p.picture };
-      lsSet('leadsnap.user', currentUser); renderUser(); toast('Signed in as ' + (p.email || p.name));
-    } });
+    const sync = el('button', { class: 'subtle sm', id: 'syncBtn', onclick: () => syncNow(true) }, ic('refresh'), el('span', { class: 'lbl' }, 'Sync'));
+    box.replaceChildren(sync,
+      currentUser.picture ? el('img', { src: currentUser.picture, alt: '', referrerpolicy: 'no-referrer', title: currentUser.email }) : null,
+      el('button', { class: 'subtle sm', onclick: signOut, title: currentUser.email }, 'Sign out'));
     $('#btnSignIn').classList.add('hidden');
-    google.accounts.id.renderButton($('#gsignin'), { theme: 'outline', size: 'medium', text: 'signin_with', shape: 'pill' });
-  } catch(e){}
+    setSync(tokenValid() ? (syncState.last ? 'ok' : 'idle') : 'needs');
+  } else {
+    box.replaceChildren(); $('#btnSignIn').classList.remove('hidden');
+  }
+}
+
+/* Copy leads into a Google Sheet (one way: the app updates the sheet, not the other way round) */
+async function openInSheets(){
+  closeMenu();
+  if (!currentUser){ toast('Sign in with Google first'); return; }
+  if (!leads.length){ toast('No leads to put in a sheet yet'); return; }
+  const win = window.open('', '_blank');
+  try {
+    await getToken();
+    const csv = buildCsv();
+    let id = syncState.sheetId;
+    if (id){
+      try { await gfetch(`https://www.googleapis.com/upload/drive/v3/files/${id}?uploadType=media`, { method: 'PATCH', headers: { 'Content-Type': 'text/csv' }, body: csv }); }
+      catch(e){ if (e.message === 'auth') throw e; id = null; }
+    }
+    if (!id){
+      const m = multipartBody({ name: 'LeadTracker leads', mimeType: 'application/vnd.google-apps.spreadsheet' }, csv, 'text/csv; charset=UTF-8');
+      id = (await (await gfetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', { method: 'POST', headers: { 'Content-Type': `multipart/related; boundary=${m.boundary}` }, body: m.body })).json()).id;
+      syncState.sheetId = id; lsSet('leadsnap.sync', syncState);
+    }
+    const url = `https://docs.google.com/spreadsheets/d/${id}/edit`;
+    if (win) win.location.href = url; else window.open(url, '_blank');
+    toast('Your Google Sheet is up to date');
+  } catch(e){
+    if (win) win.close();
+    toast(e.message === 'auth' ? 'Please sign in again' : e.message);
+  }
 }
 function googleNote(){
-  if (location.protocol === 'file:') return 'Google sign-in only works when LeadTracker is opened from a web address (for example http://localhost:8000), not from a file. Everything else works from the file.';
-  if (!settings.googleClientId) return 'To turn on Google sign-in, create a free OAuth Client ID in Google Cloud Console (APIs & Services → Credentials → Create credentials → OAuth client ID → Web application), add this page’s address under “Authorized JavaScript origins”, and paste the ID above.';
-  return 'Google sign-in is on. Your leads are still stored on this device only.';
+  if (location.protocol === 'file:') return 'Google sign-in and syncing only work when LeadTracker is opened from its web address, not from a downloaded file.';
+  return currentUser ? `Signed in as ${currentUser.email}. Your leads sync through a file called “${DATA_FILE}” in your Google Drive.` : 'Sign in with Google to back up your leads to your Google Drive and see the same list on all your devices.';
 }
 function openSettings(){
-  $('#setDays').value = settings.days; $('#setClientId').value = settings.googleClientId; $('#setModel').value = settings.aiModel;
+  $('#setDays').value = settings.days; $('#setModel').value = settings.aiModel;
   $('#googleNote').textContent = googleNote(); $('#dlgSettings').showModal();
 }
-$('#btnSignIn').addEventListener('click', openSettings);
+$('#btnSignIn').addEventListener('click', signIn);
+$('#btnSheets').addEventListener('click', openInSheets);
 $('#btnSettings').addEventListener('click', openSettings);
 $('#btnSaveSettings').addEventListener('click', () => {
   const d = parseInt($('#setDays').value, 10);
   settings.days = isNaN(d) ? 3 : Math.max(0, Math.min(60, d));
-  settings.googleClientId = $('#setClientId').value.trim();
   settings.aiModel = $('#setModel').value;
   lsSet('leadsnap.settings', settings);
-  $('#dlgSettings').close(); render(); setupGoogle(); if (!AI.ready) refreshAiSetup(); toast('Settings saved');
+  $('#dlgSettings').close(); render(); if (!AI.ready) refreshAiSetup(); toast('Settings saved');
 });
+setInterval(() => { if (currentUser && tokenValid()) syncNow(false); }, 5 * 60 * 1000);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && currentUser && tokenValid()) syncNow(false); });
 
 /* ---------------- Start ---------------- */
 let toastTimer;
@@ -1153,7 +1328,7 @@ async function load(){
   try { leads = await dbAll(); } catch(e){ leads = []; toast('This browser is blocking storage (private mode?)'); }
   render();
 }
-renderUser(); setupGoogle(); load();
+renderUser(); load().then(() => { if (currentUser && tokenValid()) syncNow(false); });
 setInterval(render, 60 * 1000);
 </script>
 </body>
