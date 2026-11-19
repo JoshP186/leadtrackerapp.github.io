@@ -1,0 +1,1160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="LeadTracker">
+<meta name="theme-color" content="#ffffff">
+<title>LeadTracker</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --surface:#ffffff; --ink:#111827; --ink2:#374151; --muted:#6b7280; --line:#e5e7eb; --line2:#d1d5db;
+    --brand:#1d4ed8; --brand-ink:#ffffff; --brand-soft:#eff4ff;
+    --green:#16a34a; --green-bg:#ecfaf0; --green-ink:#166534;
+    --yellow:#d4a106; --yellow-bg:#fff8db; --yellow-ink:#854d0e;
+    --red:#dc2626; --red-bg:#fef2f2;
+    --radius:10px; --shadow:0 1px 2px rgba(16,24,40,.06),0 1px 3px rgba(16,24,40,.08);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{font:14px/1.5 "Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased}
+  svg.i{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+  button,.btn{font:inherit;font-weight:500;display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line2);background:var(--surface);color:var(--ink2);border-radius:8px;padding:8px 13px;cursor:pointer;white-space:nowrap;line-height:1.2}
+  button:hover{background:#f9fafb}
+  button.primary{background:var(--brand);border-color:var(--brand);color:var(--brand-ink)}
+  button.primary:hover{background:#1e40af}
+  button.subtle{border-color:transparent;background:transparent}
+  button.subtle:hover{background:#f3f4f6}
+  button.danger{color:var(--red);border-color:#fecaca}
+  button.sm{padding:6px 10px;font-size:13px}
+  button.icon{padding:7px}
+  button:disabled{opacity:.5;cursor:default}
+  input,select,textarea{font:inherit;color:var(--ink)}
+  .hidden{display:none!important}
+  .muted{color:var(--muted)}
+
+  /* Top bar */
+  .topbar{position:sticky;top:0;z-index:20;background:var(--surface);border-bottom:1px solid var(--line);padding:0 20px;padding-top:env(safe-area-inset-top)}
+  .topbar .in{max-width:1240px;margin:0 auto;height:58px;display:flex;align-items:center;gap:12px}
+  .logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:16px;letter-spacing:-.2px}
+  .logo .mark{width:28px;height:28px;border-radius:7px;background:var(--brand);display:grid;place-items:center;color:#fff}
+  .logo .mark svg{width:16px;height:16px}
+  .spacer{flex:1}
+  .user{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink2)}
+  .user img{width:26px;height:26px;border-radius:50%}
+
+  main{max-width:1240px;margin:0 auto;padding:22px 20px 60px}
+  .pagehead{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:18px}
+  .pagehead h1{margin:0;font-size:22px;letter-spacing:-.3px}
+  .pagehead p{margin:2px 0 0;color:var(--muted)}
+  .pagehead .btns{display:flex;gap:8px;flex-wrap:wrap}
+
+  /* More menu */
+  details.menu{position:relative}
+  details.menu summary{list-style:none}
+  details.menu summary::-webkit-details-marker{display:none}
+  .menu-pop{position:absolute;right:0;top:calc(100% + 6px);background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.12);padding:6px;min-width:210px;z-index:30;display:flex;flex-direction:column}
+  .menu-pop button{border:0;justify-content:flex-start;width:100%}
+
+  /* Card container */
+  .panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);overflow:hidden}
+  .tabs{display:flex;gap:4px;padding:6px 10px 0;border-bottom:1px solid var(--line);overflow-x:auto;scrollbar-width:none}
+  .tabs::-webkit-scrollbar{display:none}
+  .tab{border:0;border-bottom:2px solid transparent;border-radius:0;background:none;padding:10px 10px 11px;color:var(--muted);font-weight:500}
+  .tab:hover{background:none;color:var(--ink)}
+  .tab.on{color:var(--brand);border-bottom-color:var(--brand)}
+  .tab .count{display:inline-block;min-width:20px;padding:0 6px;border-radius:99px;background:#f3f4f6;color:var(--ink2);font-size:12px;margin-left:6px}
+  .tab.on .count{background:var(--brand-soft);color:var(--brand)}
+  .controls{display:flex;gap:10px;align-items:center;padding:12px 14px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+  .seg{display:inline-flex;background:#f3f4f6;border-radius:8px;padding:3px;gap:2px}
+  .seg button{border:0;background:transparent;padding:6px 11px;font-size:13px;color:var(--ink2);border-radius:6px}
+  .seg button.on{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
+  .sortlabel{font-size:13px;color:var(--muted);margin-right:-2px}
+  .search{flex:1;min-width:200px;display:flex;align-items:center;gap:8px;border:1px solid var(--line2);border-radius:8px;padding:0 10px;background:var(--surface)}
+  .search:focus-within{border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-soft)}
+  .search input{border:0;outline:0;padding:8px 0;flex:1;background:transparent;min-width:0}
+  .search svg{color:var(--muted)}
+
+  /* Lead rows */
+  .row{display:grid;grid-template-columns:34px minmax(170px,1.5fr) minmax(120px,1fr) minmax(170px,1.3fr) 175px 150px 76px;gap:14px;align-items:center;padding:12px 16px 12px 12px;border-bottom:1px solid var(--line);border-left:4px solid transparent}
+  .row:last-child{border-bottom:0}
+  .row.head{padding-top:9px;padding-bottom:9px;font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;background:#fafafa}
+  .row.lead{background:var(--surface)}
+  .row.lead:hover{background:#fafbfc}
+  .row.done{background:var(--green-bg)!important;border-left-color:var(--green)}
+  .row.soon{background:var(--yellow-bg)!important;border-left-color:var(--yellow)}
+  .row.overdue{border-left-color:var(--red)}
+  .row .nm{font-weight:600;color:var(--ink);overflow:hidden;text-overflow:ellipsis}
+  .row .sub{color:var(--muted);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .row .cell{min-width:0}
+  .row a{color:var(--ink2);text-decoration:none;display:flex;align-items:center;gap:6px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+  .row a:hover{color:var(--brand)}
+  .row a svg{width:14px;height:14px;color:var(--muted)}
+  .meet{display:flex;align-items:center;gap:6px;color:var(--ink2);font-size:13px}
+  .meet svg{width:14px;height:14px;color:var(--muted)}
+  .chk{width:20px;height:20px;accent-color:var(--green);cursor:pointer;margin:0}
+  .tags{display:flex;gap:6px;flex-wrap:wrap}
+  .tag{font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:99px;white-space:nowrap}
+  .tag.type{background:#f3f4f6;color:var(--ink2)}
+  .tag.soon{background:#fde68a;color:var(--yellow-ink)}
+  .tag.over{background:#fee2e2;color:#991b1b}
+  .tag.done{background:#bbf7d0;color:var(--green-ink)}
+  .tag.dup{background:#fee2e2;color:#991b1b}
+  .actions{display:flex;justify-content:flex-end;gap:2px}
+  .empty{padding:56px 20px;text-align:center;color:var(--muted)}
+  .empty b{display:block;color:var(--ink);font-size:15px;margin-bottom:4px}
+  @media (max-width:860px){
+    .row.head{display:none}
+    .row{grid-template-columns:30px 1fr auto;gap:4px 10px;padding:12px}
+    .row .c-check{grid-row:1/span 5;align-self:start;padding-top:2px}
+    .row .c-name{grid-column:2;grid-row:1}
+    .row .c-actions{grid-column:3;grid-row:1}
+    .row .c-company{grid-column:2/4;grid-row:2}
+    .row .c-contact{grid-column:2/4;grid-row:3}
+    .row .c-meet{grid-column:2/4;grid-row:4}
+    .row .c-tags{grid-column:2/4;grid-row:5;margin-top:4px}
+    .row .c-company:empty,.row .c-contact:empty,.row .c-meet:empty{display:none}
+    .pagehead .btns{width:100%}
+    .pagehead .btns > *{flex:1;justify-content:center}
+    .pagehead .btns details.menu{flex:0}
+    main{padding:16px 12px 60px}
+    .topbar{padding-left:12px;padding-right:8px}
+    .topbar .lbl{display:none}
+    .topbar .in{gap:4px}
+  }
+
+  /* Dialogs */
+  dialog{border:0;border-radius:14px;padding:0;width:min(680px,96vw);max-height:92vh;box-shadow:0 24px 70px rgba(0,0,0,.28);color:var(--ink)}
+  dialog.wide{width:min(980px,96vw)}
+  dialog::backdrop{background:rgba(17,24,39,.45)}
+  dialog form{display:contents}
+  .dh{display:flex;align-items:center;gap:10px;padding:16px 20px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--surface);z-index:3}
+  .dh h2{margin:0;font-size:16px;flex:1}
+  .db{padding:18px 20px;display:flex;flex-direction:column;gap:14px}
+  .df{display:flex;gap:8px;padding:14px 20px;border-top:1px solid var(--line);position:sticky;bottom:0;background:var(--surface);flex-wrap:wrap;align-items:center;z-index:3}
+  .fgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media (max-width:560px){.fgrid{grid-template-columns:1fr}}
+  .fld{display:flex;flex-direction:column;gap:5px;font-size:12.5px;font-weight:500;color:var(--ink2)}
+  .fld input,.fld select,.fld textarea{font-size:14px;padding:8px 10px;border:1px solid var(--line2);border-radius:8px;background:var(--surface);font-weight:400}
+  .fld input:focus,.fld select:focus,.fld textarea:focus{outline:0;border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-soft)}
+  .fld textarea{min-height:84px;resize:vertical}
+  .check{display:flex;align-items:center;gap:8px;font-weight:500;cursor:pointer}
+  .photo{max-width:100%;max-height:200px;border-radius:8px;border:1px solid var(--line);align-self:flex-start;cursor:zoom-in}
+  .note{font-size:13px;color:var(--ink2);background:#f9fafb;border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+  .bar{height:6px;background:#eef0f3;border-radius:99px;overflow:hidden}
+  .bar div{height:100%;width:0;background:var(--brand);transition:width .25s}
+
+  /* Upload */
+  .drop{border:1.5px dashed var(--line2);border-radius:12px;padding:30px 20px;text-align:center;color:var(--muted);cursor:pointer;transition:.15s}
+  .drop.over,.drop:hover{border-color:var(--brand);background:var(--brand-soft);color:var(--brand)}
+  .drop b{display:block;color:var(--ink);font-size:15px;margin:8px 0 2px}
+  .drop svg{width:28px;height:28px}
+  .filelist{font-size:13px;color:var(--ink2);display:flex;flex-direction:column;gap:4px;max-height:140px;overflow:auto}
+
+  /* Review drafts */
+  .progress-wrap{display:flex;flex-direction:column;gap:6px}
+  .drafts{display:flex;flex-direction:column;gap:12px}
+  .draft{display:grid;grid-template-columns:150px 1fr;gap:14px;border:1px solid var(--line);border-radius:10px;padding:12px;position:relative}
+  .draft img{width:150px;max-height:110px;object-fit:contain;background:#f3f4f6;border-radius:6px;cursor:zoom-in}
+  .draft .fgrid{grid-template-columns:repeat(3,1fr);gap:8px}
+  .draft .fld{font-size:11.5px}
+  .draft .fld input,.draft .fld select{padding:6px 8px;font-size:13px}
+  .draft .dtop{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+  .draft .src{font-size:12px;color:var(--muted);flex:1}
+  @media (max-width:640px){.draft{grid-template-columns:1fr}.draft img{width:100%}.draft .fgrid{grid-template-columns:1fr 1fr}}
+
+  /* Assistant drawer */
+  .drawer{position:fixed;top:0;right:0;bottom:0;width:min(420px,100vw);background:var(--surface);border-left:1px solid var(--line);box-shadow:-12px 0 40px rgba(0,0,0,.12);z-index:40;display:flex;flex-direction:column;transform:translateX(105%);transition:transform .22s ease}
+  .drawer.open{transform:none}
+  .drawer .dh{padding-top:max(16px,env(safe-area-inset-top))}
+  .chat{flex:1;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:10px}
+  .msg{max-width:90%;padding:9px 12px;border-radius:12px;white-space:pre-wrap;word-wrap:break-word;font-size:14px}
+  .msg.user{align-self:flex-end;background:var(--brand);color:#fff;border-bottom-right-radius:4px}
+  .msg.ai{align-self:flex-start;background:#f3f4f6;color:var(--ink);border-bottom-left-radius:4px}
+  .msg.err{align-self:center;background:var(--red-bg);color:#991b1b;font-size:13px}
+  .chips{display:flex;gap:6px;flex-wrap:wrap;padding:0 16px 10px}
+  .chips button{font-size:12.5px;padding:5px 10px;border-radius:99px}
+  .composer{display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--line);padding-bottom:max(12px,env(safe-area-inset-bottom))}
+  .composer textarea{flex:1;resize:none;border:1px solid var(--line2);border-radius:10px;padding:9px 11px;min-height:42px;max-height:120px}
+  .composer textarea:focus{outline:0;border-color:var(--brand)}
+  .aisetup{padding:18px;display:flex;flex-direction:column;gap:12px}
+  .pill{font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;background:var(--green-bg);color:var(--green-ink)}
+
+  .sitefoot{max-width:1240px;margin:0 auto;padding:0 20px 40px;font-size:13px;color:var(--muted);display:flex;gap:16px;flex-wrap:wrap}
+  .sitefoot a{color:var(--muted)}
+  .toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(10px);background:#111827;color:#fff;padding:10px 16px;border-radius:8px;font-size:13.5px;opacity:0;transition:.2s;pointer-events:none;z-index:60}
+  .toast.show{opacity:1;transform:translateX(-50%)}
+</style>
+</head>
+<body>
+
+<header class="topbar"><div class="in">
+  <div class="logo"><span class="mark" data-icon="layers"></span>LeadTracker</div>
+  <div class="spacer"></div>
+  <button class="subtle" id="btnAssistant"><span data-icon="spark"></span><span class="lbl">Assistant</span></button>
+  <div class="user" id="userBox"></div>
+  <div id="gsignin"></div>
+  <button class="subtle" id="btnSignIn"><span data-icon="user"></span><span class="lbl">Sign in</span></button>
+  <button class="subtle icon" id="btnSettings" title="Settings" aria-label="Settings"><span data-icon="gear"></span></button>
+</div></header>
+
+<main>
+  <div class="pagehead">
+    <div><h1>Leads</h1><p id="summary">&nbsp;</p></div>
+    <div class="spacer"></div>
+    <div class="btns">
+      <button class="primary" id="btnCamera"><span data-icon="camera"></span>Take photo</button>
+      <button id="btnUpload"><span data-icon="upload"></span>Upload cards</button>
+      <button id="btnManual"><span data-icon="plus"></span>Add manually</button>
+      <details class="menu" id="moreMenu">
+        <summary class="btn icon" title="More" aria-label="More"><span data-icon="more"></span></summary>
+        <div class="menu-pop">
+          <button id="btnExport"><span data-icon="download"></span>Export to spreadsheet (CSV)</button>
+          <button id="btnBackup"><span data-icon="save"></span>Back up all leads</button>
+          <button id="btnRestore"><span data-icon="restore"></span>Restore from backup</button>
+        </div>
+      </details>
+    </div>
+  </div>
+
+  <input type="file" id="fileCamera" accept="image/*" capture="environment" class="hidden">
+  <input type="file" id="fileUpload" accept="image/*,application/pdf,.pdf,.heic" multiple class="hidden">
+  <input type="file" id="fileRestore" accept="application/json,.json" class="hidden">
+
+  <section class="panel">
+    <div class="tabs" id="statusTabs" role="tablist"></div>
+    <div class="controls">
+      <span class="sortlabel">Sort</span>
+      <div class="seg" id="sortTabs" role="tablist">
+        <button data-sort="soonest">Soonest</button>
+        <button data-sort="az">A–Z</button>
+        <button data-sort="za">Z–A</button>
+        <button data-sort="added">Date added</button>
+      </div>
+      <label class="search"><span data-icon="search"></span><input type="search" id="search" placeholder="Search by name or company" aria-label="Search by name or company"></label>
+    </div>
+    <div id="list"></div>
+  </section>
+</main>
+
+<footer class="sitefoot"><span>LeadTracker</span><a href="privacy.html">Privacy Policy</a><a href="terms.html">Terms of Service</a></footer>
+
+<!-- Edit / manual lead -->
+<dialog id="dlgLead">
+  <form id="leadForm">
+    <div class="dh"><h2 id="dlgTitle">New lead</h2><button type="button" class="subtle icon" data-close aria-label="Close"><span data-icon="x"></span></button></div>
+    <div class="db">
+      <img id="leadPhoto" class="photo hidden" alt="Card photo">
+      <div class="fgrid">
+        <label class="fld">Name<input name="name" autocomplete="off"></label>
+        <label class="fld">Company<input name="company" autocomplete="off"></label>
+        <label class="fld">Title<input name="title" autocomplete="off"></label>
+        <label class="fld">Card type<select name="cardType"><option>Business card</option><option>Lead card</option><option>Other</option></select></label>
+        <label class="fld">Email<input name="email" type="email" autocomplete="off"></label>
+        <label class="fld">Phone<input name="phone" type="tel" autocomplete="off"></label>
+        <label class="fld">Website<input name="website" autocomplete="off"></label>
+        <label class="fld">Next meeting or call<input name="meeting" type="datetime-local"></label>
+      </div>
+      <label class="fld">Notes / to-do<textarea name="notes" placeholder="What still needs to happen with this lead?"></textarea></label>
+      <label class="check"><input type="checkbox" name="done" class="chk"> Everything is done with this lead</label>
+    </div>
+    <div class="df">
+      <button type="submit" class="primary">Save lead</button>
+      <button type="button" id="btnIcs"><span data-icon="calendar"></span>Add to calendar</button>
+      <button type="button" id="btnLeadEmail"><span data-icon="spark"></span>Draft email</button>
+      <div class="spacer"></div>
+      <button type="button" class="danger" id="btnDelete">Delete</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Upload -->
+<dialog id="dlgUpload">
+  <div class="dh"><h2>Upload cards</h2><button type="button" class="subtle icon" data-close aria-label="Close"><span data-icon="x"></span></button></div>
+  <div class="db">
+    <div class="drop" id="drop">
+      <span data-icon="upload"></span>
+      <b>Drop photos or PDFs here</b>
+      <span>or click to choose files: JPG, PNG or PDF, as many as you like</span>
+    </div>
+    <div class="filelist" id="fileList"></div>
+    <label class="check"><input type="checkbox" id="multiPerPage"> Some pages or photos have several cards on them</label>
+    <div class="note">Each photo or PDF page is read as one card. Turn on the option above if you scanned several cards onto one page. LeadTracker will try to split them, and you can fix anything before saving.</div>
+  </div>
+  <div class="df"><div class="spacer"></div><button type="button" data-close>Cancel</button><button type="button" class="primary" id="btnStartUpload" disabled>Read cards</button></div>
+</dialog>
+
+<!-- Review scanned cards -->
+<dialog id="dlgReview" class="wide">
+  <div class="dh"><h2 id="reviewTitle">Review cards</h2><button type="button" id="btnAiAll" class="hidden"><span data-icon="spark"></span>Improve all with AI</button><button type="button" class="subtle icon" id="btnReviewClose" aria-label="Close"><span data-icon="x"></span></button></div>
+  <div class="db">
+    <div class="progress-wrap" id="reviewProgress"><div class="bar"><div id="reviewBar"></div></div><div class="muted" id="reviewStatus">Getting ready…</div></div>
+    <div class="drafts" id="drafts"></div>
+  </div>
+  <div class="df"><span class="muted" id="reviewHint">Check each card, then save.</span><div class="spacer"></div><button type="button" id="btnReviewCancel">Cancel</button><button type="button" class="primary" id="btnSaveDrafts" disabled>Save leads</button></div>
+</dialog>
+
+<!-- Settings -->
+<dialog id="dlgSettings">
+  <div class="dh"><h2>Settings</h2><button type="button" class="subtle icon" data-close aria-label="Close"><span data-icon="x"></span></button></div>
+  <div class="db">
+    <label class="fld">Yellow highlight: meetings within this many days<input type="number" id="setDays" min="0" max="60"></label>
+    <label class="fld">AI model to download if Chrome’s built-in AI isn’t available
+      <select id="setModel">
+        <option value="Llama-3.2-1B-Instruct-q4f16_1-MLC">Fast: Llama 3.2 1B (about 0.9 GB)</option>
+        <option value="Llama-3.2-3B-Instruct-q4f16_1-MLC">Smarter: Llama 3.2 3B (about 2.3 GB)</option>
+      </select>
+    </label>
+    <label class="fld">Google Client ID (for Sign in with Google)<input id="setClientId" placeholder="xxxxxxxx.apps.googleusercontent.com"></label>
+    <div class="note" id="googleNote"></div>
+  </div>
+  <div class="df"><div class="spacer"></div><button type="button" data-close>Cancel</button><button type="button" class="primary" id="btnSaveSettings">Save</button></div>
+</dialog>
+
+<dialog id="dlgImg" class="wide"><div class="dh"><h2>Card photo</h2><button type="button" class="subtle icon" data-close aria-label="Close"><span data-icon="x"></span></button></div><div class="db"><img id="bigImg" style="max-width:100%" alt="Card photo"></div></dialog>
+
+<!-- Assistant -->
+<aside class="drawer" id="drawer" aria-label="Assistant">
+  <div class="dh"><h2>Assistant</h2><span class="pill">Runs on this device</span><button type="button" class="subtle icon" id="btnNewChat" title="New chat" aria-label="New chat"><span data-icon="refresh"></span></button><button type="button" class="subtle icon" id="btnCloseDrawer" aria-label="Close"><span data-icon="x"></span></button></div>
+  <div class="aisetup" id="aiSetup">
+    <div class="note" id="aiInfo">Checking what this device supports…</div>
+    <button class="primary" id="btnAiStart" disabled><span data-icon="spark"></span>Turn on assistant</button>
+    <div class="progress-wrap hidden" id="aiProgress"><div class="bar"><div id="aiBar"></div></div><div class="muted" id="aiStatus"></div></div>
+  </div>
+  <div class="chat hidden" id="chat"></div>
+  <div class="chips hidden" id="chips">
+    <button data-q="Who should I follow up with first this week, and why?">Who to follow up with</button>
+    <button data-q="Summarize my open leads in a short list.">Summarize open leads</button>
+    <button data-q="Which leads are overdue or have no next meeting set?">What’s slipping</button>
+  </div>
+  <div class="composer hidden" id="composer"><textarea id="chatInput" rows="1" placeholder="Ask about your leads…"></textarea><button class="primary icon" id="btnSend" aria-label="Send"><span data-icon="send"></span></button></div>
+</aside>
+
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+
+/* ---------------- Icons ---------------- */
+const ICONS = {
+  layers:'<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>',
+  spark:'<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/>',
+  user:'<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+  gear:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+  camera:'<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>',
+  upload:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>',
+  download:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>',
+  plus:'<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>',
+  more:'<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
+  search:'<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
+  mail:'<path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>',
+  phone:'<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/>',
+  calendar:'<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
+  edit:'<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+  x:'<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
+  save:'<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>',
+  restore:'<polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>',
+  refresh:'<polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>',
+  send:'<line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>'
+};
+function ic(name){ const t = document.createElement('template'); t.innerHTML = `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name] || ''}</svg>`; return t.content.firstChild; }
+$$('[data-icon]').forEach(s => s.replaceWith(ic(s.dataset.icon)));
+
+/* ---------------- Storage ---------------- */
+// Internal storage names are kept from the first version so existing leads carry over.
+const DB_NAME = 'leadsnap', STORE = 'leads';
+let dbp = null;
+function db(){
+  if (!dbp) dbp = new Promise((res, rej) => {
+    const r = indexedDB.open(DB_NAME, 1);
+    r.onupgradeneeded = () => r.result.createObjectStore(STORE, { keyPath: 'id' });
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+  return dbp;
+}
+function tx(mode, fn){
+  return db().then(d => new Promise((res, rej) => {
+    const t = d.transaction(STORE, mode), req = fn(t.objectStore(STORE));
+    t.oncomplete = () => res(req && 'result' in req ? req.result : undefined);
+    t.onerror = () => rej(t.error);
+  }));
+}
+const dbAll = () => tx('readonly', s => s.getAll());
+const dbPut = lead => tx('readwrite', s => s.put(lead));
+const dbDel = id => tx('readwrite', s => s.delete(id));
+function lsGet(k, def){ try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : def; } catch(e){ return def; } }
+function lsSet(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} }
+
+let settings = Object.assign({ days: 3, googleClientId: '', aiModel: 'Llama-3.2-1B-Instruct-q4f16_1-MLC', sort: 'soonest' }, lsGet('leadsnap.settings', {}));
+let currentUser = lsGet('leadsnap.user', null);
+let leads = [];
+let statusFilter = 'all';
+let editing = null;
+const newId = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
+
+/* ---------------- Status & sorting ---------------- */
+function startOfDay(d){ const x = new Date(d); x.setHours(0,0,0,0); return x; }
+function meetingDate(l){ if (!l.meeting) return null; const d = new Date(l.meeting); return isNaN(d) ? null : d; }
+function leadStatus(l, now = new Date()){
+  if (l.done) return 'done';
+  const m = meetingDate(l);
+  if (!m) return 'open';
+  if (m < now) return 'overdue';
+  const limit = startOfDay(now); limit.setDate(limit.getDate() + Number(settings.days) + 1);
+  return m < limit ? 'soon' : 'open';
+}
+function fmtMeeting(s){
+  const d = new Date(s); if (isNaN(d)) return '';
+  const today = startOfDay(new Date()), day = startOfDay(d), diff = Math.round((day - today) / 864e5);
+  const time = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  if (diff === 0) return 'Today, ' + time;
+  if (diff === 1) return 'Tomorrow, ' + time;
+  if (diff === -1) return 'Yesterday, ' + time;
+  return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) + ', ' + time;
+}
+const byName = (a, b) => {
+  const x = (a.name || '').trim(), y = (b.name || '').trim();
+  if (!x !== !y) return x ? -1 : 1;           // unnamed leads go last
+  return x.localeCompare(y, undefined, { sensitivity: 'base' });
+};
+const SORTS = {
+  // Default: open leads with the soonest meeting first (overdue ones are earliest, so they lead),
+  // then open leads without a meeting (newest first), then finished leads.
+  soonest: (a, b) => {
+    if (!!a.done !== !!b.done) return a.done ? 1 : -1;
+    const ma = meetingDate(a), mb = meetingDate(b);
+    if (ma && mb) return ma - mb;
+    if (ma || mb) return ma ? -1 : 1;
+    return (b.created || 0) - (a.created || 0);
+  },
+  az: byName,
+  za: (a, b) => { const x = (a.name || '').trim(), y = (b.name || '').trim(); if (!x !== !y) return x ? -1 : 1; return -byName(a, b); },
+  added: (a, b) => (b.created || 0) - (a.created || 0)
+};
+
+/* ---------------- Rendering ---------------- */
+function el(tag, attrs = {}, ...kids){
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)){
+    if (k === 'class') e.className = v;
+    else if (k.startsWith('on') && typeof v === 'function') e.addEventListener(k.slice(2), v);
+    else if (v !== false && v != null) e.setAttribute(k, v === true ? '' : v);
+  }
+  for (const k of kids.flat()) if (k != null && k !== false && k !== '') e.append(k.nodeType ? k : document.createTextNode(k));
+  return e;
+}
+
+function render(){
+  const now = new Date();
+  const c = { all: leads.length, soon: 0, overdue: 0, open: 0, done: 0 };
+  leads.forEach(l => { const s = leadStatus(l, now); if (s === 'done') c.done++; else c.open++; if (s === 'soon') c.soon++; if (s === 'overdue') c.overdue++; });
+  $('#summary').textContent = leads.length
+    ? `${leads.length} lead${leads.length === 1 ? '' : 's'} · ${c.soon} coming up · ${c.overdue} overdue · ${c.done} done`
+    : 'Scan a card or upload a stack of them to get started.';
+
+  const tabs = [['all','All'],['soon','Coming up'],['overdue','Overdue'],['open','Not done'],['done','Done']];
+  $('#statusTabs').replaceChildren(...tabs.map(([k, label]) =>
+    el('button', { class: 'tab' + (statusFilter === k ? ' on' : ''), role: 'tab', 'aria-selected': statusFilter === k ? 'true' : 'false', onclick: () => { statusFilter = k; render(); } },
+      label, el('span', { class: 'count' }, String(c[k])))));
+  $$('#sortTabs button').forEach(b => b.classList.toggle('on', b.dataset.sort === settings.sort));
+
+  const q = $('#search').value.trim().toLowerCase();
+  const shown = leads.filter(l => {
+    const s = leadStatus(l, now);
+    if (statusFilter === 'soon' && s !== 'soon') return false;
+    if (statusFilter === 'overdue' && s !== 'overdue') return false;
+    if (statusFilter === 'open' && s === 'done') return false;
+    if (statusFilter === 'done' && s !== 'done') return false;
+    return !q || (l.name || '').toLowerCase().includes(q) || (l.company || '').toLowerCase().includes(q);
+  }).sort(SORTS[settings.sort] || SORTS.soonest);
+
+  const list = $('#list');
+  if (!shown.length){
+    list.replaceChildren(el('div', { class: 'empty' },
+      el('b', {}, leads.length ? 'No leads match' : 'No leads yet'),
+      leads.length ? 'Try another tab or search.' : 'Use “Take photo” or “Upload cards” to add your first leads.'));
+    return;
+  }
+  const head = el('div', { class: 'row head' }, el('div'), el('div', {}, 'Name'), el('div', {}, 'Company'), el('div', {}, 'Contact'), el('div', {}, 'Next meeting'), el('div', {}, 'Status'), el('div'));
+  list.replaceChildren(head, ...shown.map(l => leadRow(l, now)));
+}
+
+function leadRow(l, now){
+  const s = leadStatus(l, now);
+  const cb = el('input', { type: 'checkbox', class: 'chk', 'aria-label': 'Done' });
+  cb.checked = !!l.done;
+  cb.addEventListener('change', async () => { l.done = cb.checked; l.updated = Date.now(); await dbPut(l); render(); toast(l.done ? 'Marked as done' : 'Marked as not done'); });
+  const md = meetingDate(l);
+  return el('div', { class: `row lead ${s}` },
+    el('div', { class: 'cell c-check' }, cb),
+    el('div', { class: 'cell c-name' }, el('div', { class: 'nm' }, l.name || 'Unnamed lead'), l.title ? el('div', { class: 'sub' }, l.title) : null),
+    el('div', { class: 'cell c-company sub' }, l.company || ''),
+    el('div', { class: 'cell c-contact' },
+      l.email ? el('a', { href: 'mailto:' + l.email }, ic('mail'), l.email) : null,
+      l.phone ? el('a', { href: 'tel:' + l.phone.replace(/[^\d+]/g, '') }, ic('phone'), l.phone) : null),
+    el('div', { class: 'cell c-meet' }, md ? el('span', { class: 'meet' }, ic('calendar'), fmtMeeting(l.meeting)) : ''),
+    el('div', { class: 'cell c-tags tags' },
+      s === 'soon' ? el('span', { class: 'tag soon' }, 'Coming up') : null,
+      s === 'overdue' ? el('span', { class: 'tag over' }, 'Overdue') : null,
+      s === 'done' ? el('span', { class: 'tag done' }, 'Done') : null,
+      l.cardType ? el('span', { class: 'tag type' }, l.cardType) : null),
+    el('div', { class: 'cell c-actions actions' },
+      el('button', { class: 'subtle icon', title: 'Draft email with AI', 'aria-label': 'Draft email with AI', onclick: () => draftEmail(l) }, ic('spark')),
+      el('button', { class: 'subtle icon', title: 'Edit', 'aria-label': 'Edit', onclick: () => openLead(l) }, ic('edit'))));
+}
+
+$$('#sortTabs button').forEach(b => b.addEventListener('click', () => { settings.sort = b.dataset.sort; lsSet('leadsnap.settings', settings); render(); }));
+$('#search').addEventListener('input', render);
+
+/* ---------------- Lead dialog ---------------- */
+const form = $('#leadForm');
+const FIELDS = ['name','company','title','email','phone','website','cardType','meeting','notes'];
+function openLead(lead){
+  editing = lead || null;
+  form.reset();
+  $('#dlgTitle').textContent = lead ? 'Edit lead' : 'New lead';
+  $('#btnDelete').classList.toggle('hidden', !lead);
+  $('#btnLeadEmail').classList.toggle('hidden', !lead);
+  if (lead){ FIELDS.forEach(f => form.elements[f].value = lead[f] || (f === 'cardType' ? 'Business card' : '')); form.elements.done.checked = !!lead.done; }
+  const ph = $('#leadPhoto');
+  ph.classList.toggle('hidden', !(lead && lead.image));
+  if (lead && lead.image) ph.src = lead.image;
+  $('#dlgLead').showModal();
+}
+$('#leadPhoto').addEventListener('click', e => showImage(e.target.src));
+form.addEventListener('submit', async e => {
+  e.preventDefault();
+  const data = {};
+  FIELDS.forEach(f => data[f] = form.elements[f].value.trim());
+  data.done = form.elements.done.checked;
+  if (!data.name && !data.company && !data.email && !data.phone){ toast('Add at least a name, company, email or phone'); return; }
+  const lead = Object.assign(editing || { id: newId(), created: Date.now() }, data, { updated: Date.now() });
+  await dbPut(lead); await load(); $('#dlgLead').close(); toast('Lead saved');
+});
+$('#btnDelete').addEventListener('click', async () => {
+  if (!editing || !confirm(`Delete ${editing.name || 'this lead'}? This can’t be undone.`)) return;
+  await dbDel(editing.id); await load(); $('#dlgLead').close(); toast('Lead deleted');
+});
+$('#btnIcs').addEventListener('click', () => {
+  const v = k => form.elements[k].value.trim();
+  if (!v('meeting')){ toast('Set a meeting date and time first'); return; }
+  downloadIcs({ name: v('name'), company: v('company'), phone: v('phone'), email: v('email'), notes: v('notes'), meeting: v('meeting') });
+});
+$('#btnLeadEmail').addEventListener('click', () => { if (editing){ $('#dlgLead').close(); draftEmail(editing); } });
+$$('[data-close]').forEach(b => b.addEventListener('click', () => b.closest('dialog').close()));
+function showImage(src){ $('#bigImg').src = src; $('#dlgImg').showModal(); }
+
+/* ---------------- Adding leads: camera, upload, manual ---------------- */
+$('#btnCamera').addEventListener('click', () => $('#fileCamera').click());
+$('#btnManual').addEventListener('click', () => openLead(null));
+$('#btnUpload').addEventListener('click', () => { pickedFiles = []; renderPicked(); $('#dlgUpload').showModal(); });
+$('#fileCamera').addEventListener('change', e => { const f = [...e.target.files]; e.target.value = ''; if (f.length) processFiles(f, false); });
+
+let pickedFiles = [];
+const drop = $('#drop');
+drop.addEventListener('click', () => $('#fileUpload').click());
+$('#fileUpload').addEventListener('change', e => { addPicked([...e.target.files]); e.target.value = ''; });
+['dragenter','dragover'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave','drop'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop', e => addPicked([...e.dataTransfer.files]));
+function addPicked(files){
+  const ok = files.filter(f => /^image\//.test(f.type) || /\.(pdf|heic|heif|jpe?g|png|webp)$/i.test(f.name) || f.type === 'application/pdf');
+  if (ok.length < files.length) toast('Some files were skipped (only photos and PDFs work)');
+  pickedFiles.push(...ok); renderPicked();
+}
+function renderPicked(){
+  $('#fileList').replaceChildren(...pickedFiles.map(f => el('div', {}, `• ${f.name}`)));
+  $('#btnStartUpload').disabled = !pickedFiles.length;
+  $('#btnStartUpload').textContent = pickedFiles.length ? `Read ${pickedFiles.length} file${pickedFiles.length > 1 ? 's' : ''}` : 'Read cards';
+}
+$('#btnStartUpload').addEventListener('click', () => {
+  const files = pickedFiles.slice(), multi = $('#multiPerPage').checked;
+  $('#dlgUpload').close(); processFiles(files, multi);
+});
+
+/* ---------------- OCR pipeline ---------------- */
+const TESS_URL = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
+const PDF_BASE = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/build/';
+let ocrWorker = null, ocrProgress = () => {};
+function loadScript(src){
+  return new Promise((res, rej) => {
+    if (document.querySelector(`script[src="${src}"]`)) return res();
+    const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error('Could not load ' + src));
+    document.head.append(s);
+  });
+}
+async function getOcr(){
+  if (ocrWorker) return ocrWorker;
+  await loadScript(TESS_URL);
+  ocrWorker = await Tesseract.createWorker('eng', 1, { logger: m => { if (m.status === 'recognizing text') ocrProgress(m.progress); } });
+  return ocrWorker;
+}
+let pdfjs = null;
+async function getPdfjs(){
+  if (pdfjs) return pdfjs;
+  pdfjs = await import(PDF_BASE + 'pdf.min.mjs');
+  try {
+    const code = await (await fetch(PDF_BASE + 'pdf.worker.min.mjs')).text();
+    pdfjs.GlobalWorkerOptions.workerSrc = URL.createObjectURL(new Blob([code], { type: 'text/javascript' }));
+  } catch(e){ pdfjs.GlobalWorkerOptions.workerSrc = PDF_BASE + 'pdf.worker.min.mjs'; }
+  return pdfjs;
+}
+function loadImage(file){
+  return new Promise((res, rej) => {
+    const url = URL.createObjectURL(file), img = new Image();
+    img.onload = () => { URL.revokeObjectURL(url); res(img); };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('unreadable image')); };
+    img.src = url;
+  });
+}
+function toCanvas(src, max){
+  const w = src.naturalWidth || src.width, h = src.naturalHeight || src.height;
+  const r = Math.min(1, max / Math.max(w, h));
+  const c = document.createElement('canvas'); c.width = Math.round(w * r); c.height = Math.round(h * r);
+  const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height); ctx.drawImage(src, 0, 0, c.width, c.height);
+  return c;
+}
+function cropDataUrl(canvas, box){
+  const pad = Math.round(Math.min(canvas.width, canvas.height) * 0.02);
+  const x = Math.max(0, box ? box.x0 - pad : 0), y = Math.max(0, box ? box.y0 - pad : 0);
+  const w = Math.min(canvas.width, box ? box.x1 + pad : canvas.width) - x, h = Math.min(canvas.height, box ? box.y1 + pad : canvas.height) - y;
+  const r = Math.min(1, 800 / Math.max(w, h));
+  const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(w * r)); c.height = Math.max(1, Math.round(h * r));
+  c.getContext('2d').drawImage(canvas, x, y, w, h, 0, 0, c.width, c.height);
+  return c.toDataURL('image/jpeg', 0.78);
+}
+
+// Split one page into several cards by grouping nearby text blocks.
+function splitCards(data, W, H){
+  const whole = [{ text: data.text || '', box: null }];
+  const blocks = (data.blocks || []).filter(b => b.text && b.text.replace(/\W/g, '').length >= 2);
+  if (blocks.length < 2) return whole;
+  const lineHeights = blocks.flatMap(b => (b.paragraphs || []).flatMap(p => (p.lines || []).map(l => l.bbox.y1 - l.bbox.y0))).sort((a, b) => a - b);
+  const lh = lineHeights.length ? lineHeights[Math.floor(lineHeights.length / 2)] : Math.min(W, H) * 0.02;
+  const gap = Math.max(lh * 2.2, Math.min(W, H) * 0.015);
+  const parent = blocks.map((_, i) => i), find = i => parent[i] === i ? i : (parent[i] = find(parent[i]));
+  const near = (a, b) => a.x0 - gap <= b.x1 && b.x0 - gap <= a.x1 && a.y0 - gap <= b.y1 && b.y0 - gap <= a.y1;
+  for (let i = 0; i < blocks.length; i++) for (let j = i + 1; j < blocks.length; j++) if (near(blocks[i].bbox, blocks[j].bbox)) parent[find(i)] = find(j);
+  const groups = new Map();
+  blocks.forEach((b, i) => { const r = find(i); if (!groups.has(r)) groups.set(r, []); groups.get(r).push(b); });
+  const mk = bs => {
+    bs.sort((a, b) => a.bbox.y0 - b.bbox.y0 || a.bbox.x0 - b.bbox.x0);
+    return { blocks: bs, text: bs.map(b => b.text.trim()).join('\n'),
+      box: { x0: Math.min(...bs.map(b => b.bbox.x0)), y0: Math.min(...bs.map(b => b.bbox.y0)), x1: Math.max(...bs.map(b => b.bbox.x1)), y1: Math.max(...bs.map(b => b.bbox.y1)) } };
+  };
+  let gs = [...groups.values()].map(mk);
+  // A group counts as its own card only if it has contact details and at least 3 lines of text.
+  const hasContact = g => (EMAIL_RE.test(g.text) || PHONE_RE.test(g.text)) && g.text.split('\n').filter(t => t.trim()).length >= 3;
+  const real = gs.filter(hasContact);
+  if (real.length < 2) return whole;
+  // Attach text without contact details (logos, names, titles) to the closest card that has them.
+  const center = b => [(b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2];
+  const dist = (a, b) => { const dx = Math.max(0, a.x0 - b.x1, b.x0 - a.x1), dy = Math.max(0, a.y0 - b.y1, b.y0 - a.y1); return Math.hypot(dx, dy); };
+  for (const g of gs.filter(g => !hasContact(g))){
+    let best = real[0], bd = Infinity;
+    for (const r of real){ const d = dist(g.box, r.box); if (d < bd){ bd = d; best = r; } }
+    best.blocks.push(...g.blocks);
+  }
+  return real.map(r => mk(r.blocks)).sort((a, b) => {
+    const [ax, ay] = center(a.box), [bx, by] = center(b.box);
+    return Math.abs(ay - by) > (a.box.y1 - a.box.y0) / 2 ? ay - by : ax - bx;
+  });
+}
+
+let drafts = [], reviewBusy = false, reviewCancelled = false;
+async function processFiles(files, multi){
+  drafts = []; reviewBusy = true; reviewCancelled = false;
+  renderDrafts();
+  $('#reviewTitle').textContent = 'Reading cards';
+  $('#reviewProgress').classList.remove('hidden');
+  $('#btnSaveDrafts').disabled = true;
+  if (!$('#dlgReview').open) $('#dlgReview').showModal();
+  const status = t => $('#reviewStatus').textContent = t;
+  const bar = p => $('#reviewBar').style.width = Math.round(p * 100) + '%';
+  const problems = [];
+  try {
+    status('Loading the card reader (the first time takes a few seconds)…'); bar(0.02);
+    const worker = await getOcr();
+    for (let fi = 0; fi < files.length && !reviewCancelled; fi++){
+      const f = files[fi];
+      const isPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
+      let pages = [];
+      try {
+        if (isPdf){
+          status(`Opening ${f.name}…`);
+          const lib = await getPdfjs();
+          const doc = await lib.getDocument({ data: new Uint8Array(await f.arrayBuffer()) }).promise;
+          for (let p = 1; p <= doc.numPages; p++) pages.push({ label: `${f.name}, page ${p}`, get: async () => {
+            const page = await doc.getPage(p), v1 = page.getViewport({ scale: 1 });
+            const scale = Math.min(4, (multi ? 2800 : 2000) / Math.max(v1.width, v1.height)), vp = page.getViewport({ scale });
+            const c = document.createElement('canvas'); c.width = Math.floor(vp.width); c.height = Math.floor(vp.height);
+            const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+            await page.render({ canvasContext: ctx, viewport: vp }).promise; return c;
+          }});
+        } else {
+          pages.push({ label: f.name, get: async () => toCanvas(await loadImage(f), multi ? 3000 : 2000) });
+        }
+      } catch(err){ problems.push(f.name); continue; }
+
+      for (let pi = 0; pi < pages.length && !reviewCancelled; pi++){
+        const pg = pages[pi];
+        const base = (fi + pi / pages.length) / files.length, span = 1 / files.length / pages.length;
+        ocrProgress = p => bar(base + span * p);
+        status(`Reading ${pg.label} (${fi + 1} of ${files.length} file${files.length > 1 ? 's' : ''})…`);
+        let canvas;
+        try { canvas = await pg.get(); } catch(err){ problems.push(pg.label); continue; }
+        const { data } = await worker.recognize(canvas, {}, { text: true, blocks: true });
+        const cards = multi ? splitCards(data, canvas.width, canvas.height) : [{ text: data.text || '', box: null }];
+        cards.forEach((card, ci) => {
+          const parsed = parseCard(card.text);
+          drafts.push(Object.assign({ id: newId(), cardType: 'Business card', raw: card.text, image: cropDataUrl(canvas, card.box),
+            source: cards.length > 1 ? `${pg.label}, card ${ci + 1}` : pg.label }, stripEmpty(parsed)));
+        });
+        renderDrafts();
+      }
+    }
+    bar(1);
+    const n = drafts.length;
+    status(n ? `Found ${n} card${n > 1 ? 's' : ''}. Check the details, then save.` : 'No cards found.');
+    if (problems.length) status($('#reviewStatus').textContent + ` Couldn’t open: ${problems.join(', ')}. (iPhone HEIC photos may need to be saved as JPG.)`);
+  } catch(err){
+    status('The card reader needs an internet connection the first time it runs. Check your connection and try again.');
+  } finally {
+    reviewBusy = false;
+    $('#reviewTitle').textContent = drafts.length ? `Review ${drafts.length} card${drafts.length > 1 ? 's' : ''}` : 'Review cards';
+    $('#btnSaveDrafts').disabled = !drafts.length;
+    renderDrafts();
+  }
+}
+function stripEmpty(o){ const r = {}; for (const [k, v] of Object.entries(o)) if (v) r[k] = v; return r; }
+
+function findDuplicate(d){
+  const em = (d.email || '').toLowerCase(), nm = (d.name || '').toLowerCase(), co = (d.company || '').toLowerCase();
+  return leads.find(l => (em && (l.email || '').toLowerCase() === em) || (nm && co && (l.name || '').toLowerCase() === nm && (l.company || '').toLowerCase() === co));
+}
+
+function renderDrafts(){
+  const cont = $('#drafts');
+  const aiOn = AI.ready;
+  $('#btnAiAll').classList.toggle('hidden', !aiOn || !drafts.length || reviewBusy);
+  $('#btnSaveDrafts').textContent = drafts.length ? `Save ${drafts.length} lead${drafts.length > 1 ? 's' : ''}` : 'Save leads';
+  cont.replaceChildren(...drafts.map((d, i) => {
+    const input = (key, label, type = 'text') => {
+      const inp = el('input', { type, value: d[key] || '', autocomplete: 'off' });
+      inp.addEventListener('input', () => { d[key] = inp.value; });
+      return el('label', { class: 'fld' }, label, inp);
+    };
+    const sel = el('select', {}, ...['Business card','Lead card','Other'].map(o => { const op = el('option', {}, o); if (o === d.cardType) op.selected = true; return op; }));
+    sel.addEventListener('change', () => d.cardType = sel.value);
+    const meet = input('meeting', 'Next meeting', 'datetime-local');
+    const dup = findDuplicate(d);
+    const aiBtn = aiOn ? el('button', { type: 'button', class: 'sm', onclick: async ev => {
+      const b = ev.currentTarget; b.disabled = true; b.textContent = 'Improving…';
+      try { await aiImproveDraft(d); toast('Updated with AI'); } catch(e){ toast('AI couldn’t read this one'); }
+      renderDrafts();
+    } }, ic('spark'), 'Improve with AI') : null;
+    return el('div', { class: 'draft' },
+      el('img', { src: d.image, alt: 'Card', onclick: () => showImage(d.image) }),
+      el('div', {},
+        el('div', { class: 'dtop' },
+          el('span', { class: 'src' }, d.source || `Card ${i + 1}`),
+          dup ? el('span', { class: 'tag dup', title: 'A lead with the same email or name already exists' }, 'Possible duplicate: ' + (dup.name || dup.email)) : null,
+          aiBtn,
+          el('button', { type: 'button', class: 'subtle icon', title: 'Remove', 'aria-label': 'Remove card', onclick: () => { drafts.splice(i, 1); renderDrafts(); $('#btnSaveDrafts').disabled = !drafts.length; } }, ic('x'))),
+        el('div', { class: 'fgrid' },
+          input('name', 'Name'), input('company', 'Company'), input('title', 'Title'),
+          input('email', 'Email', 'email'), input('phone', 'Phone', 'tel'), input('website', 'Website'),
+          el('label', { class: 'fld' }, 'Card type', sel), meet,
+          input('notes', 'Notes'))));
+  }));
+}
+$('#btnSaveDrafts').addEventListener('click', async () => {
+  const keep = drafts.filter(d => d.name || d.company || d.email || d.phone);
+  const t = Date.now();
+  for (let i = 0; i < keep.length; i++){
+    const d = keep[i];
+    await dbPut({ id: d.id, created: t + i, updated: t + i, done: false,
+      name: (d.name || '').trim(), company: (d.company || '').trim(), title: (d.title || '').trim(), email: (d.email || '').trim(),
+      phone: (d.phone || '').trim(), website: (d.website || '').trim(), cardType: d.cardType || 'Business card',
+      meeting: d.meeting || '', notes: (d.notes || '').trim(), image: d.image });
+  }
+  const skipped = drafts.length - keep.length;
+  drafts = []; $('#dlgReview').close(); await load();
+  toast(`Saved ${keep.length} lead${keep.length === 1 ? '' : 's'}` + (skipped ? ` (${skipped} empty card${skipped > 1 ? 's' : ''} skipped)` : ''));
+});
+function closeReview(){
+  if (drafts.length && !confirm('Discard these scanned cards?')) return;
+  reviewCancelled = true; drafts = []; $('#dlgReview').close();
+}
+$('#btnReviewCancel').addEventListener('click', closeReview);
+$('#btnReviewClose').addEventListener('click', closeReview);
+$('#dlgReview').addEventListener('cancel', e => { e.preventDefault(); closeReview(); });
+$('#btnAiAll').addEventListener('click', async () => {
+  const b = $('#btnAiAll'); b.disabled = true;
+  let ok = 0;
+  for (let i = 0; i < drafts.length; i++){
+    b.textContent = `Improving ${i + 1} of ${drafts.length}…`;
+    try { await aiImproveDraft(drafts[i]); ok++; } catch(e){}
+  }
+  b.disabled = false; b.replaceChildren(ic('spark'), 'Improve all with AI');
+  renderDrafts(); toast(`AI checked ${ok} of ${drafts.length} cards`);
+});
+
+/* ---------------- Card text parser ---------------- */
+const EMAIL_RE = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
+const PHONE_RE = /(\+?\d{1,2}[\s.\-]?)?\(?\d{3}\)?[\s.\-]?\d{3}[\s.\-]?\d{4}(\s*(x|ext\.?)\s*\d{1,5})?/i;
+// PARSER START
+function parseCard(text){
+  const emailRe = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
+  const phoneRe = /(\+?\d{1,2}[\s.\-]?)?\(?\d{3}\)?[\s.\-]?\d{3}[\s.\-]?\d{4}(\s*(x|ext\.?)\s*\d{1,5})?/i;
+  const out = { name:'', company:'', title:'', email:'', phone:'', website:'', cardType:'' };
+  const lines = String(text || '').split(/\r?\n/)
+    .map(l => l.replace(/[|•·®©™]+/g, ' ').replace(/\s+/g, ' ').trim())
+    .filter(l => l.length > 1);
+
+  // Labeled lines, common on trade-show lead cards: "Name: Jane Doe"
+  const labels = {
+    name: /^(full\s*name|name|contact)\s*[:\-–]\s*(.+)$/i,
+    company: /^(company|organi[sz]ation|business|firm)\s*[:\-–]\s*(.+)$/i,
+    title: /^(title|job\s*title|position|role)\s*[:\-–]\s*(.+)$/i,
+    email: /^(e-?mail)\s*[:\-–]\s*(.+)$/i,
+    phone: /^(phone|tel|telephone|mobile|cell|m|t|p|direct|office)\s*[:.\-–]\s*(.+)$/i,
+    website: /^(web(site)?|url|w)\s*[:\-–]\s*(.+)$/i
+  };
+  let labeled = 0;
+  for (const line of lines){
+    for (const [k, re] of Object.entries(labels)){
+      const m = line.match(re);
+      if (m && !out[k]){ out[k] = m[m.length - 1].trim(); labeled++; break; }
+    }
+  }
+  if (labeled >= 2) out.cardType = 'Lead card';
+
+  const em = out.email.match(emailRe) || String(text).match(emailRe);
+  out.email = em ? em[0].toLowerCase() : '';
+
+  if (out.phone){ const pm = out.phone.match(phoneRe); out.phone = pm ? pm[0].trim() : out.phone; }
+  if (!out.phone){
+    const cands = lines.filter(l => !/fax|\bf\s*[:.]/i.test(l) && phoneRe.test(l));
+    const best = cands.find(l => /mobile|cell|\bm\s*[:.]/i.test(l)) || cands[0];
+    if (best) out.phone = best.match(phoneRe)[0].trim();
+  }
+
+  if (!out.website){
+    const noEmail = String(text).replace(new RegExp(emailRe.source, 'gi'), ' ');
+    const wm = noEmail.match(/\b(?:https?:\/\/)?(?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:com|net|org|io|co|us|biz|info|ai|app|ca|uk)\b(?:\/\S*)?/i);
+    if (wm) out.website = wm[0].toLowerCase();
+  }
+
+  const titleRe = /\b(ceo|cfo|coo|cto|cmo|vp|svp|evp|president|founder|co-founder|owner|partner|principal|director|manager|mgr|head of|lead|chief|officer|executive|engineer|specialist|consultant|representative|rep|associate|coordinator|supervisor|analyst|agent|broker|account|sales|marketing|operations|administrator|designer|developer|buyer|purchasing|estimator)\b/i;
+  const companyRe = /\b(inc|llc|l\.l\.c|ltd|corp|corporation|company|co\.|group|solutions|services|systems|technologies|technology|industries|enterprises|partners|associates|holdings|international|consulting|logistics|manufacturing|supply|realty|bank|insurance|agency|studio|labs?)\b\.?/i;
+  const contactish = l => emailRe.test(l) || phoneRe.test(l) || /www\.|https?:|\.com\b/i.test(l) || /\d{3,}/.test(l);
+  const used = new Set();
+
+  if (!out.title){
+    const t = lines.find(l => titleRe.test(l) && !contactish(l) && l.split(' ').length <= 7);
+    if (t){ out.title = t; used.add(t); }
+  } else used.add(out.title);
+
+  if (!out.company){
+    const c = lines.find(l => companyRe.test(l) && !contactish(l) && !used.has(l));
+    if (c){ out.company = c; used.add(c); }
+  } else used.add(out.company);
+
+  if (!out.name){
+    const looksLikeName = l => {
+      if (used.has(l) || contactish(l) || titleRe.test(l) || companyRe.test(l)) return false;
+      const words = l.replace(/[,.]/g, ' ').trim().split(/\s+/);
+      if (words.length < 2 || words.length > 4) return false;
+      return words.every(w => /^[A-Z][a-zA-Z'’\-]*$/.test(w) || /^[A-Z]\.?$/.test(w) || /^(jr|sr|ii|iii|iv|phd|mba)\.?$/i.test(w));
+    };
+    const n = lines.find(looksLikeName);
+    if (n){ out.name = n.replace(/\b([A-Z])([A-Z'’\-]+)\b/g, (m, a, b) => a + b.toLowerCase()); used.add(n); }
+  }
+
+  if (!out.company && out.email){
+    const dom = out.email.split('@')[1].split('.')[0];
+    const free = ['gmail','yahoo','hotmail','outlook','icloud','aol','live','msn','me','protonmail','comcast','att','verizon'];
+    if (!free.includes(dom)) out.company = dom.charAt(0).toUpperCase() + dom.slice(1);
+  }
+  return out;
+}
+// PARSER END
+
+/* ---------------- On-device AI assistant ---------------- */
+// Uses Chrome's built-in model (Gemini Nano) when the browser has it; otherwise downloads a small
+// open model once (WebLLM) and runs it on this computer's graphics chip. Nothing is sent to a server.
+const AI = { kind: null, ready: false, engine: null, starting: false };
+const WEBLLM_URL = 'https://esm.run/@mlc-ai/web-llm@0.2.79';
+let chatHistory = [];
+
+async function aiDetect(){
+  let builtin = null;
+  try { if ('LanguageModel' in self) builtin = await LanguageModel.availability(); } catch(e){}
+  if (builtin === 'unavailable') builtin = null;
+  return { builtin, webgpu: !!navigator.gpu };
+}
+async function refreshAiSetup(){
+  if (AI.ready){ showChat(); return; }
+  const d = await aiDetect();
+  const info = $('#aiInfo'), btn = $('#btnAiStart');
+  if (d.builtin){
+    info.textContent = d.builtin === 'available'
+      ? 'This browser has a built-in AI model. The assistant runs privately on this device.'
+      : 'This browser can download its built-in AI model (one time). After that, the assistant runs privately on this device.';
+    btn.disabled = false; btn.dataset.kind = 'builtin';
+  } else if (d.webgpu){
+    const label = $('#setModel').querySelector(`option[value="${settings.aiModel}"]`)?.textContent || settings.aiModel;
+    info.textContent = `The assistant will download an AI model once: ${label}. After that it runs on this computer. Nothing is sent to a server. Best on Wi-Fi.`;
+    btn.disabled = false; btn.dataset.kind = 'webllm';
+  } else {
+    info.textContent = 'This browser can’t run an on-device AI model. Try the latest Chrome or Edge on a computer with a recent graphics chip. Everything else in LeadTracker still works.';
+    btn.disabled = true;
+  }
+}
+async function aiStart(){
+  if (AI.ready || AI.starting) return;
+  AI.starting = true;
+  const kind = $('#btnAiStart').dataset.kind;
+  const prog = $('#aiProgress'), bar = $('#aiBar'), st = $('#aiStatus');
+  prog.classList.remove('hidden'); $('#btnAiStart').disabled = true;
+  try {
+    if (kind === 'builtin'){
+      st.textContent = 'Preparing the built-in model…';
+      const s = await LanguageModel.create({ monitor(m){ m.addEventListener('downloadprogress', e => { bar.style.width = Math.round((e.loaded || 0) * 100) + '%'; st.textContent = `Downloading the built-in model… ${Math.round((e.loaded || 0) * 100)}%`; }); } });
+      if (s && s.destroy) s.destroy();
+      AI.kind = 'builtin';
+    } else {
+      st.textContent = 'Loading the AI engine…';
+      const webllm = await import(WEBLLM_URL);
+      AI.engine = await webllm.CreateMLCEngine(settings.aiModel, { initProgressCallback: r => {
+        bar.style.width = Math.round((r.progress || 0) * 100) + '%';
+        st.textContent = (r.progress || 0) < 1 ? `Setting up the model… ${Math.round((r.progress || 0) * 100)}% (only slow the first time)` : 'Almost ready…';
+      } });
+      AI.kind = 'webllm';
+    }
+    AI.ready = true; showChat(); renderDrafts();
+  } catch(err){
+    st.textContent = 'Couldn’t start the assistant: ' + (err && err.message ? err.message : err) + '. Check your internet connection for the first download, or try Chrome.';
+    $('#btnAiStart').disabled = false;
+  } finally { AI.starting = false; }
+}
+async function aiComplete(messages, { onToken, json } = {}){
+  if (!AI.ready) throw new Error('assistant is off');
+  if (AI.kind === 'webllm'){
+    if (onToken){
+      const stream = await AI.engine.chat.completions.create({ messages, stream: true, temperature: 0.4 });
+      let full = '';
+      for await (const ch of stream){ full += ch.choices[0]?.delta?.content || ''; onToken(full); }
+      return full;
+    }
+    const r = await AI.engine.chat.completions.create(Object.assign({ messages, temperature: 0.1 }, json ? { response_format: { type: 'json_object' } } : {}));
+    return r.choices[0].message.content;
+  }
+  // Chrome built-in model
+  const sys = messages.find(m => m.role === 'system');
+  const rest = messages.filter(m => m.role !== 'system');
+  const last = rest.pop();
+  const session = await LanguageModel.create({ initialPrompts: [...(sys ? [{ role: 'system', content: sys.content }] : []), ...rest.map(m => ({ role: m.role, content: m.content }))] });
+  try {
+    if (onToken){
+      let full = '';
+      for await (const ch of session.promptStreaming(last.content)){ full = (full && ch.startsWith(full)) ? ch : full + ch; onToken(full); }
+      return full;
+    }
+    return await session.prompt(last.content);
+  } finally { if (session.destroy) session.destroy(); }
+}
+
+function leadsContext(){
+  const now = new Date();
+  const label = { done: 'DONE', soon: 'COMING UP', overdue: 'OVERDUE', open: 'OPEN' };
+  const list = leads.slice().sort(SORTS.soonest).slice(0, 40).map((l, i) => {
+    const bits = [`${i + 1}. ${l.name || 'Unnamed'}`];
+    if (l.title || l.company) bits.push(`(${[l.title, l.company].filter(Boolean).join(', ')})`);
+    bits.push(`status: ${label[leadStatus(l, now)]}`);
+    bits.push(l.meeting ? `next meeting: ${fmtMeeting(l.meeting)}` : 'next meeting: none set');
+    if (l.notes) bits.push(`notes: ${l.notes.slice(0, 140).replace(/\s+/g, ' ')}`);
+    return bits.join(' | ');
+  });
+  return list.length ? list.join('\n') : '(no leads yet)';
+}
+function systemPrompt(){
+  const today = new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  return `You are the assistant inside LeadTracker, an app a salesperson uses to track leads from business cards and trade-show lead cards. Today is ${today}. Be brief, practical and friendly. Base answers only on the leads listed below; if the answer isn't in them, say so. Never invent contact details.\n\nLeads (soonest meeting first):\n${leadsContext()}`;
+}
+function addMsg(role, text){
+  const m = el('div', { class: 'msg ' + role }, text);
+  $('#chat').append(m); $('#chat').scrollTop = $('#chat').scrollHeight; return m;
+}
+function showChat(){
+  $('#aiSetup').classList.add('hidden');
+  ['#chat', '#chips', '#composer'].forEach(s => $(s).classList.remove('hidden'));
+  if (!$('#chat').children.length) addMsg('ai', 'Hi! I can see your leads. Ask me who to follow up with, or tap the sparkle on a lead to draft an email to them.');
+}
+let sending = false;
+async function sendChat(text){
+  text = (text || '').trim(); if (!text || sending) return;
+  if (!AI.ready){ toast('Turn on the assistant first'); return; }
+  sending = true; $('#btnSend').disabled = true;
+  addMsg('user', text);
+  chatHistory.push({ role: 'user', content: text });
+  const out = addMsg('ai', '…');
+  try {
+    const msgs = [{ role: 'system', content: systemPrompt() }, ...chatHistory.slice(-8)];
+    const reply = await aiComplete(msgs, { onToken: t => { out.textContent = t; $('#chat').scrollTop = $('#chat').scrollHeight; } });
+    out.textContent = reply.trim() || '(no answer)';
+    chatHistory.push({ role: 'assistant', content: reply });
+  } catch(err){
+    out.remove(); addMsg('err', 'Something went wrong: ' + (err && err.message ? err.message : err));
+    chatHistory.pop();
+  } finally { sending = false; $('#btnSend').disabled = false; }
+}
+function openDrawer(){ $('#drawer').classList.add('open'); refreshAiSetup(); }
+function draftEmail(l){
+  openDrawer();
+  const ask = `Write a short, professional follow-up email to ${l.name || 'this lead'}${l.company ? ' at ' + l.company : ''}${l.title ? ' (' + l.title + ')' : ''}. ` +
+    (l.meeting ? `We have a meeting or call set for ${fmtMeeting(l.meeting)}. ` : 'Suggest setting up a quick call. ') +
+    (l.notes ? `My notes: ${l.notes}. ` : '') + 'Include a subject line. Leave [Your name] as the signature.';
+  if (AI.ready) sendChat(ask);
+  else { $('#chatInput').value = ask; toast('Turn on the assistant, then press send'); }
+}
+async function aiImproveDraft(d){
+  const sys = 'You read OCR text from a business card or trade-show lead card. OCR text can have mistakes; fix obvious ones. Reply with ONLY a JSON object with these keys: name, company, title, email, phone, website. Use "" for anything not on the card. Never make up details.';
+  const reply = await aiComplete([{ role: 'system', content: sys }, { role: 'user', content: (d.raw || '').slice(0, 1500) }], { json: true });
+  const m = String(reply).match(/\{[\s\S]*\}/);
+  if (!m) throw new Error('no JSON');
+  const j = JSON.parse(m[0]);
+  const s = k => (typeof j[k] === 'string' ? j[k].trim() : '');
+  // Trust the AI for names and job details; keep exact email/phone matches from the card text when we have them.
+  ['name', 'company', 'title', 'website'].forEach(k => { if (s(k)) d[k] = s(k); });
+  ['email', 'phone'].forEach(k => { if (!d[k] && s(k)) d[k] = s(k); });
+}
+$('#btnAssistant').addEventListener('click', () => $('#drawer').classList.contains('open') ? $('#drawer').classList.remove('open') : openDrawer());
+$('#btnCloseDrawer').addEventListener('click', () => $('#drawer').classList.remove('open'));
+$('#btnAiStart').addEventListener('click', aiStart);
+$('#btnSend').addEventListener('click', () => { const v = $('#chatInput').value; $('#chatInput').value = ''; sendChat(v); });
+$('#chatInput').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); $('#btnSend').click(); } });
+$$('#chips button').forEach(b => b.addEventListener('click', () => sendChat(b.dataset.q)));
+$('#btnNewChat').addEventListener('click', () => { chatHistory = []; $('#chat').replaceChildren(); if (AI.ready) showChat(); });
+
+/* ---------------- Calendar, export, backup ---------------- */
+function icsEscape(s){ return String(s || '').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n'); }
+function icsLocal(d){ const p = n => String(n).padStart(2, '0'); return `${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}T${p(d.getHours())}${p(d.getMinutes())}00`; }
+function downloadIcs(l){
+  const start = new Date(l.meeting);
+  const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z');
+  const who = [l.name, l.company].filter(Boolean).join(' – ');
+  const desc = [l.phone && 'Phone: ' + l.phone, l.email && 'Email: ' + l.email, l.notes].filter(Boolean).join('\n');
+  const ics = ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//LeadTracker//EN','BEGIN:VEVENT',
+    `UID:${newId()}@leadtracker`, `DTSTAMP:${stamp}`, `DTSTART:${icsLocal(start)}`, 'DURATION:PT30M',
+    `SUMMARY:${icsEscape('Follow up: ' + (who || 'lead'))}`, `DESCRIPTION:${icsEscape(desc)}`,
+    'BEGIN:VALARM','TRIGGER:-PT15M','ACTION:DISPLAY','DESCRIPTION:Lead follow-up','END:VALARM',
+    'END:VEVENT','END:VCALENDAR'].join('\r\n');
+  downloadBlob(new Blob([ics], { type: 'text/calendar' }), `meeting-${(l.name || 'lead').replace(/\W+/g, '-')}.ics`);
+}
+function downloadBlob(blob, name){
+  const a = el('a', { href: URL.createObjectURL(blob), download: name });
+  document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+}
+function closeMenu(){ $('#moreMenu').open = false; }
+$('#btnExport').addEventListener('click', () => {
+  closeMenu();
+  if (!leads.length){ toast('No leads to export yet'); return; }
+  const cols = ['Name','Company','Title','Email','Phone','Website','Card type','Next meeting or call','Done','Status','Notes','Date added'];
+  const q = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+  const label = { done: 'Done', soon: 'Coming up', overdue: 'Overdue', open: 'Open' };
+  const rows = leads.slice().sort(SORTS[settings.sort] || SORTS.soonest).map(l => [l.name, l.company, l.title, l.email, l.phone, l.website, l.cardType,
+    l.meeting ? new Date(l.meeting).toLocaleString() : '', l.done ? 'TRUE' : 'FALSE', label[leadStatus(l)], l.notes,
+    l.created ? new Date(l.created).toLocaleDateString() : ''].map(q).join(','));
+  downloadBlob(new Blob(['\ufeff' + [cols.map(q).join(','), ...rows].join('\r\n')], { type: 'text/csv' }), 'leadtracker-leads.csv');
+});
+$('#btnBackup').addEventListener('click', () => {
+  closeMenu();
+  downloadBlob(new Blob([JSON.stringify({ app: 'LeadTracker', version: 2, exported: new Date().toISOString(), leads })], { type: 'application/json' }), 'leadtracker-backup.json');
+});
+$('#btnRestore').addEventListener('click', () => { closeMenu(); $('#fileRestore').click(); });
+$('#fileRestore').addEventListener('change', async e => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  try {
+    const data = JSON.parse(await f.text());
+    const list = Array.isArray(data) ? data : data.leads;
+    if (!Array.isArray(list)) throw new Error('bad file');
+    if (!confirm(`Add ${list.length} leads from this backup? Leads that already exist will be replaced by the backup copy.`)) return;
+    for (const l of list) if (l && l.id) await dbPut(l);
+    await load(); toast(`Restored ${list.length} leads`);
+  } catch(err){ toast('That file isn’t a LeadTracker backup'); }
+});
+document.addEventListener('click', e => { if (!e.target.closest('#moreMenu')) closeMenu(); });
+
+/* ---------------- Google sign-in ---------------- */
+function decodeJwt(t){
+  const b = t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+  const bin = atob(b + '='.repeat((4 - b.length % 4) % 4));
+  return JSON.parse(decodeURIComponent(bin.split('').map(c => '%' + c.charCodeAt(0).toString(16).padStart(2, '0')).join('')));
+}
+function renderUser(){
+  const box = $('#userBox');
+  if (currentUser){
+    box.replaceChildren(
+      currentUser.picture ? el('img', { src: currentUser.picture, alt: '', referrerpolicy: 'no-referrer' }) : null,
+      el('span', { class: 'lbl' }, currentUser.name || currentUser.email),
+      el('button', { class: 'subtle sm', onclick: signOut }, 'Sign out'));
+    $('#btnSignIn').classList.add('hidden'); $('#gsignin').replaceChildren();
+  } else { box.replaceChildren(); $('#btnSignIn').classList.remove('hidden'); }
+}
+function signOut(){
+  currentUser = null; lsSet('leadsnap.user', null);
+  try { google.accounts.id.disableAutoSelect(); } catch(e){}
+  renderUser(); setupGoogle();
+}
+async function setupGoogle(){
+  if (currentUser || !settings.googleClientId || location.protocol === 'file:') return;
+  try {
+    await loadScript('https://accounts.google.com/gsi/client');
+    google.accounts.id.initialize({ client_id: settings.googleClientId, callback: r => {
+      const p = decodeJwt(r.credential);
+      currentUser = { name: p.name, email: p.email, picture: p.picture };
+      lsSet('leadsnap.user', currentUser); renderUser(); toast('Signed in as ' + (p.email || p.name));
+    } });
+    $('#btnSignIn').classList.add('hidden');
+    google.accounts.id.renderButton($('#gsignin'), { theme: 'outline', size: 'medium', text: 'signin_with', shape: 'pill' });
+  } catch(e){}
+}
+function googleNote(){
+  if (location.protocol === 'file:') return 'Google sign-in only works when LeadTracker is opened from a web address (for example http://localhost:8000), not from a file. Everything else works from the file.';
+  if (!settings.googleClientId) return 'To turn on Google sign-in, create a free OAuth Client ID in Google Cloud Console (APIs & Services → Credentials → Create credentials → OAuth client ID → Web application), add this page’s address under “Authorized JavaScript origins”, and paste the ID above.';
+  return 'Google sign-in is on. Your leads are still stored on this device only.';
+}
+function openSettings(){
+  $('#setDays').value = settings.days; $('#setClientId').value = settings.googleClientId; $('#setModel').value = settings.aiModel;
+  $('#googleNote').textContent = googleNote(); $('#dlgSettings').showModal();
+}
+$('#btnSignIn').addEventListener('click', openSettings);
+$('#btnSettings').addEventListener('click', openSettings);
+$('#btnSaveSettings').addEventListener('click', () => {
+  const d = parseInt($('#setDays').value, 10);
+  settings.days = isNaN(d) ? 3 : Math.max(0, Math.min(60, d));
+  settings.googleClientId = $('#setClientId').value.trim();
+  settings.aiModel = $('#setModel').value;
+  lsSet('leadsnap.settings', settings);
+  $('#dlgSettings').close(); render(); setupGoogle(); if (!AI.ready) refreshAiSetup(); toast('Settings saved');
+});
+
+/* ---------------- Start ---------------- */
+let toastTimer;
+function toast(msg){ const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2400); }
+async function load(){
+  try { leads = await dbAll(); } catch(e){ leads = []; toast('This browser is blocking storage (private mode?)'); }
+  render();
+}
+renderUser(); setupGoogle(); load();
+setInterval(render, 60 * 1000);
+</script>
+</body>
+</html>
