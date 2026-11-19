@@ -174,6 +174,19 @@
   .msg.user{align-self:flex-end;background:var(--brand);color:#fff;border-bottom-right-radius:4px}
   .msg.ai{align-self:flex-start;background:#f3f4f6;color:var(--ink);border-bottom-left-radius:4px}
   .msg.err{align-self:center;background:var(--red-bg);color:#991b1b;font-size:13px}
+  .msg.mail{max-width:100%;width:100%;background:var(--surface);border:1px solid var(--line);display:flex;flex-direction:column;gap:6px;white-space:normal}
+  .msg.mail.confirm{border-color:#93c5fd;background:var(--brand-soft)}
+  .mlabel{font-weight:600}
+  .mhead{font-size:11.5px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-top:4px}
+  .msub{font-weight:600}
+  .mbody{white-space:pre-wrap;background:#f9fafb;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:13.5px}
+  .mi{width:100%;font:inherit;font-size:13.5px;padding:7px 9px;border:1px solid var(--line2);border-radius:8px}
+  .mi.mb{resize:vertical;white-space:pre-wrap}
+  .mbtns,.picks{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+  .kv{font-size:13.5px;word-break:break-all}
+  .mlink{font-size:12.5px;color:var(--brand);margin-top:4px}
+  .merr{color:#991b1b;font-size:13px;margin-top:4px}
+  .msent{color:var(--green-ink);font-weight:600}
   .chips{display:flex;gap:6px;flex-wrap:wrap;padding:0 16px 10px}
   .chips button{font-size:12.5px;padding:5px 10px;border-radius:99px}
   .composer{display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--line);padding-bottom:max(12px,env(safe-area-inset-bottom))}
@@ -263,7 +276,7 @@
     <div class="df">
       <button type="submit" class="primary">Save lead</button>
       <button type="button" id="btnIcs"><span data-icon="calendar"></span>Add to calendar</button>
-      <button type="button" id="btnLeadEmail"><span data-icon="spark"></span>Draft email</button>
+      <button type="button" id="btnLeadEmail"><span data-icon="send"></span>Send follow-up</button>
       <div class="spacer"></div>
       <button type="button" class="danger" id="btnDelete">Delete</button>
     </div>
@@ -322,13 +335,14 @@
     <button class="primary" id="btnAiStart" disabled><span data-icon="spark"></span>Turn on assistant</button>
     <div class="progress-wrap hidden" id="aiProgress"><div class="bar"><div id="aiBar"></div></div><div class="muted" id="aiStatus"></div></div>
   </div>
-  <div class="chat hidden" id="chat"></div>
-  <div class="chips hidden" id="chips">
-    <button data-q="Who should I follow up with first this week, and why?">Who to follow up with</button>
-    <button data-q="Summarize my open leads in a short list.">Summarize open leads</button>
-    <button data-q="Which leads are overdue or have no next meeting set?">What’s slipping</button>
+  <div class="chat" id="chat"></div>
+  <div class="chips" id="chips">
+    <button data-kind="followup">Who to follow up with</button>
+    <button data-kind="summary">Summarize open leads</button>
+    <button data-kind="slipping">What’s slipping</button>
+    <button id="chipEmail">Send a follow-up</button>
   </div>
-  <div class="composer hidden" id="composer"><textarea id="chatInput" rows="1" placeholder="Ask about your leads…"></textarea><button class="primary icon" id="btnSend" aria-label="Send"><span data-icon="send"></span></button></div>
+  <div class="composer" id="composer"><textarea id="chatInput" rows="1" placeholder="Ask a question, or “email Dana”"></textarea><button class="primary icon" id="btnSend" aria-label="Send"><span data-icon="send"></span></button></div>
 </aside>
 
 <div class="toast" id="toast"></div>
@@ -508,7 +522,7 @@ function leadRow(l, now){
       s === 'done' ? el('span', { class: 'tag done' }, 'Done') : null,
       l.cardType ? el('span', { class: 'tag type' }, l.cardType) : null),
     el('div', { class: 'cell c-actions actions' },
-      el('button', { class: 'subtle icon', title: 'Draft email with AI', 'aria-label': 'Draft email with AI', onclick: () => draftEmail(l) }, ic('spark')),
+      el('button', { class: 'subtle icon', title: 'Send a follow-up email', 'aria-label': 'Send a follow-up email', onclick: () => draftEmail(l) }, ic('send')),
       el('button', { class: 'subtle icon', title: 'Edit', 'aria-label': 'Edit', onclick: () => openLead(l) }, ic('edit'))));
 }
 
@@ -695,7 +709,7 @@ async function processFiles(files, multi){
           const doc = await lib.getDocument({ data: new Uint8Array(await f.arrayBuffer()) }).promise;
           for (let p = 1; p <= doc.numPages; p++) pages.push({ label: `${f.name}, page ${p}`, get: async () => {
             const page = await doc.getPage(p), v1 = page.getViewport({ scale: 1 });
-            const scale = Math.min(4, (multi ? 2800 : 2000) / Math.max(v1.width, v1.height)), vp = page.getViewport({ scale });
+            const scale = Math.min(5, (multi ? 3300 : 2600) / Math.max(v1.width, v1.height)), vp = page.getViewport({ scale });
             const c = document.createElement('canvas'); c.width = Math.floor(vp.width); c.height = Math.floor(vp.height);
             const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
             await page.render({ canvasContext: ctx, viewport: vp }).promise; return c;
@@ -817,6 +831,8 @@ function parseCard(text){
   const emailRe = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
   const phoneRe = /(\+?\d{1,2}[\s.\-]?)?\(?\d{3}\)?[\s.\-]?\d{3}[\s.\-]?\d{4}(\s*(x|ext\.?)\s*\d{1,5})?/i;
   const out = { name:'', company:'', title:'', email:'', phone:'', website:'', cardType:'' };
+  text = String(text || '').replace(/[ \t]*@[ \t]*/g, '@')   // scanners often add spaces around @
+    .replace(/([A-Za-z0-9])\.[ \t]+(?=[A-Za-z0-9._%+-]*@)/g, '$1.');   // and after dots inside an email
   const lines = String(text || '').split(/\r?\n/)
     .map(l => l.replace(/[|•·®©™]+/g, ' ').replace(/\s+/g, ' ').trim())
     .filter(l => l.length > 1);
@@ -948,16 +964,17 @@ async function aiStart(){
     $('#btnAiStart').disabled = false;
   } finally { AI.starting = false; }
 }
-async function aiComplete(messages, { onToken, json } = {}){
+async function aiComplete(messages, opts = {}){
+  const { onToken, json } = opts;
   if (!AI.ready) throw new Error('assistant is off');
   if (AI.kind === 'webllm'){
     if (onToken){
-      const stream = await AI.engine.chat.completions.create({ messages, stream: true, temperature: 0.4 });
+      const stream = await AI.engine.chat.completions.create({ messages, stream: true, temperature: 0.2 });
       let full = '';
       for await (const ch of stream){ full += ch.choices[0]?.delta?.content || ''; onToken(full); }
       return full;
     }
-    const r = await AI.engine.chat.completions.create(Object.assign({ messages, temperature: 0.1 }, json ? { response_format: { type: 'json_object' } } : {}));
+    const r = await AI.engine.chat.completions.create(Object.assign({ messages, temperature: opts.temperature ?? 0.1 }, json ? { response_format: { type: 'json_object' } } : {}));
     return r.choices[0].message.content;
   }
   // Chrome built-in model
@@ -975,22 +992,78 @@ async function aiComplete(messages, { onToken, json } = {}){
   } finally { if (session.destroy) session.destroy(); }
 }
 
+// Leads sorted into groups by the app itself, so the small on-device model never has to work out dates or statuses.
+function leadGroups(){
+  const now = new Date(), g = { overdue: [], soon: [], nomeet: [], later: [], done: [] };
+  for (const l of leads.slice().sort(SORTS.soonest)){
+    const s = leadStatus(l, now);
+    if (s === 'done') g.done.push(l);
+    else if (s === 'overdue') g.overdue.push(l);
+    else if (s === 'soon') g.soon.push(l);
+    else if (!meetingDate(l)) g.nomeet.push(l);
+    else g.later.push(l);
+  }
+  return g;
+}
+function who(l){ const job = [l.title, l.company].filter(Boolean).join(' at '); return (l.name || 'Unnamed lead') + (job ? ` (${job})` : ''); }
+function leadLine(l, withNotes = true){
+  let t = '- ' + who(l);
+  if (l.meeting) t += `. Meeting: ${fmtMeeting(l.meeting)}`;
+  if (withNotes && l.notes) t += `. Notes: ${l.notes.slice(0, 120).replace(/\s+/g, ' ')}`;
+  return t;
+}
 function leadsContext(){
-  const now = new Date();
-  const label = { done: 'DONE', soon: 'COMING UP', overdue: 'OVERDUE', open: 'OPEN' };
-  const list = leads.slice().sort(SORTS.soonest).slice(0, 40).map((l, i) => {
-    const bits = [`${i + 1}. ${l.name || 'Unnamed'}`];
-    if (l.title || l.company) bits.push(`(${[l.title, l.company].filter(Boolean).join(', ')})`);
-    bits.push(`status: ${label[leadStatus(l, now)]}`);
-    bits.push(l.meeting ? `next meeting: ${fmtMeeting(l.meeting)}` : 'next meeting: none set');
-    if (l.notes) bits.push(`notes: ${l.notes.slice(0, 140).replace(/\s+/g, ' ')}`);
-    return bits.join(' | ');
-  });
-  return list.length ? list.join('\n') : '(no leads yet)';
+  const g = leadGroups(), sec = (title, list) => `${title} (${list.length}):\n` + (list.length ? list.slice(0, 15).map(l => leadLine(l)).join('\n') : '- none');
+  return [
+    sec('OVERDUE: meeting time has already passed and the lead is not done', g.overdue),
+    sec(`COMING UP: meeting within the next ${settings.days} days`, g.soon),
+    sec('NO MEETING SET: not done and no meeting scheduled', g.nomeet),
+    sec('SCHEDULED LATER: meeting more than ' + settings.days + ' days away', g.later),
+    sec('DONE: finished, no action needed', g.done)
+  ].join('\n\n');
 }
 function systemPrompt(){
   const today = new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-  return `You are the assistant inside LeadTracker, an app a salesperson uses to track leads from business cards and trade-show lead cards. Today is ${today}. Be brief, practical and friendly. Base answers only on the leads listed below; if the answer isn't in them, say so. Never invent contact details.\n\nLeads (soonest meeting first):\n${leadsContext()}`;
+  return `You are the assistant inside LeadTracker, an app a salesperson uses to track leads from business cards and trade-show lead cards. Today is ${today}.
+Rules:
+- Answer in plain, friendly sentences or a short bulleted list. Never copy the raw list format below.
+- The leads are already sorted into groups. Trust the group each lead is in. Never move a lead to a different group.
+- Only mention leads that are listed below, and never invent names, dates or contact details. If something isn't in the list, say you don't know.
+- Keep answers short.
+
+The salesperson's leads:
+
+${leadsContext()}`;
+}
+// Answers for the quick buttons, worked out directly from the data (no AI needed, always accurate).
+function quickAnswer(kind){
+  if (!leads.length) return 'You don’t have any leads yet. Scan or upload a card to get started.';
+  const g = leadGroups(), lines = (list, max = 8) => list.slice(0, max).map(l => leadLine(l, false)).join('\n') + (list.length > max ? `\n…and ${list.length - max} more` : '');
+  if (kind === 'slipping'){
+    if (!g.overdue.length && !g.nomeet.length) return 'Nothing is slipping. Every open lead has an upcoming meeting. 👍';
+    const out = [];
+    if (g.overdue.length) out.push(`Overdue (${g.overdue.length}): the meeting time passed and they’re not marked done:\n${lines(g.overdue)}`);
+    else out.push('Overdue: none.');
+    if (g.nomeet.length) out.push(`No next meeting set (${g.nomeet.length}):\n${lines(g.nomeet)}`);
+    else out.push('No next meeting set: none.');
+    return out.join('\n\n');
+  }
+  if (kind === 'followup'){
+    const pick = [
+      ...g.overdue.map(l => ({ l, why: 'meeting already passed, so check in or reschedule' })),
+      ...g.soon.map(l => ({ l, why: `meeting ${fmtMeeting(l.meeting).toLowerCase()}, so prepare and confirm` })),
+      ...g.nomeet.map(l => ({ l, why: 'no meeting set yet, so reach out to book one' }))
+    ].slice(0, 6);
+    if (!pick.length) return 'You’re all caught up. Every open lead has a meeting scheduled further out, or is done.';
+    return 'Here’s who to follow up with first:\n' + pick.map((p, i) => `${i + 1}. ${who(p.l)}: ${p.why}.`).join('\n');
+  }
+  const open = g.overdue.length + g.soon.length + g.nomeet.length + g.later.length;
+  const out = [`You have ${open} open lead${open === 1 ? '' : 's'} and ${g.done.length} done.`];
+  if (g.overdue.length) out.push(`Overdue (${g.overdue.length}):\n${lines(g.overdue)}`);
+  if (g.soon.length) out.push(`Coming up in the next ${settings.days} days (${g.soon.length}):\n${lines(g.soon)}`);
+  if (g.nomeet.length) out.push(`No meeting set (${g.nomeet.length}):\n${lines(g.nomeet)}`);
+  if (g.later.length) out.push(`Scheduled later (${g.later.length}):\n${lines(g.later)}`);
+  return out.join('\n\n');
 }
 function addMsg(role, text){
   const m = el('div', { class: 'msg ' + role }, text);
@@ -998,13 +1071,18 @@ function addMsg(role, text){
 }
 function showChat(){
   $('#aiSetup').classList.add('hidden');
-  ['#chat', '#chips', '#composer'].forEach(s => $(s).classList.remove('hidden'));
-  if (!$('#chat').children.length) addMsg('ai', 'Hi! I can see your leads. Ask me who to follow up with, or tap the sparkle on a lead to draft an email to them.');
+  if (!$('#chat').querySelector('.ai')) addMsg('ai', 'Hi! I can see your leads. Ask me who to follow up with, or tap the send icon on a lead to email them.');
 }
 let sending = false;
 async function sendChat(text){
   text = (text || '').trim(); if (!text || sending) return;
-  if (!AI.ready){ toast('Turn on the assistant first'); return; }
+  if (EMAIL_INTENT.test(text)){
+    addMsg('user', text);
+    const lead = findLeadInText(text);
+    if (lead) startEmail(lead, text); else pickLeadToEmail(text);
+    return;
+  }
+  if (!AI.ready){ addMsg('user', text); addMsg('ai', 'Turn on the assistant above to ask me questions. Without it, I can still use the quick buttons, and draft and send follow-up emails. Try “send a follow up to” plus a name.'); return; }
   sending = true; $('#btnSend').disabled = true;
   addMsg('user', text);
   chatHistory.push({ role: 'user', content: text });
@@ -1019,15 +1097,186 @@ async function sendChat(text){
     chatHistory.pop();
   } finally { sending = false; $('#btnSend').disabled = false; }
 }
-function openDrawer(){ $('#drawer').classList.add('open'); refreshAiSetup(); }
-function draftEmail(l){
-  openDrawer();
-  const ask = `Write a short, professional follow-up email to ${l.name || 'this lead'}${l.company ? ' at ' + l.company : ''}${l.title ? ' (' + l.title + ')' : ''}. ` +
-    (l.meeting ? `We have a meeting or call set for ${fmtMeeting(l.meeting)}. ` : 'Suggest setting up a quick call. ') +
-    (l.notes ? `My notes: ${l.notes}. ` : '') + 'Include a subject line. Leave [Your name] as the signature.';
-  if (AI.ready) sendChat(ask);
-  else { $('#chatInput').value = ask; toast('Turn on the assistant, then press send'); }
+function openDrawer(){
+  $('#drawer').classList.add('open'); refreshAiSetup();
+  if (!$('#chat').children.length) addMsg('ai', 'Hi! I can draft and send follow-up emails from your Gmail. Try “send a follow up to” plus a name, or tap the send icon on any lead. The buttons below give you a quick rundown of your leads.');
 }
+/* ---------------- Follow-up emails: draft → confirm → send from Gmail ---------------- */
+const GMAIL_SCOPE = 'https://www.googleapis.com/auth/gmail.send';
+let gmailClient = null, gmailToken = null, gmailExp = 0, tplIndex = 0;
+
+// Ask Google for permission to send mail. Only happens when you press Send.
+async function getGmailToken(){
+  if (gmailToken && Date.now() < gmailExp - 60000) return gmailToken;
+  await initGoogle();
+  if (!gmailClient) gmailClient = google.accounts.oauth2.initTokenClient({ client_id: GOOGLE_CLIENT_ID, scope: GMAIL_SCOPE, include_granted_scopes: true, callback: () => {} });
+  return new Promise((res, rej) => {
+    gmailClient.callback = r => {
+      if (r.error) return rej(new Error(r.error_description || r.error));
+      if (!google.accounts.oauth2.hasGrantedAllScopes(r, GMAIL_SCOPE)) return rej(new Error('LeadTracker needs permission to send email from your Gmail. Please tick that box when Google asks.'));
+      gmailToken = r.access_token; gmailExp = Date.now() + (Number(r.expires_in) || 3600) * 1000; res(gmailToken);
+    };
+    gmailClient.error_callback = e => rej(new Error(e && e.type === 'popup_closed' ? 'The Google window was closed' : e && e.type === 'popup_failed_to_open' ? 'Your browser blocked the Google popup. Allow popups for this site and try again.' : 'Google permission failed'));
+    gmailClient.requestAccessToken({ prompt: '', login_hint: currentUser ? currentUser.email : undefined });
+  });
+}
+function b64utf8(s){ const bytes = new TextEncoder().encode(s); let bin = ''; bytes.forEach(b => bin += String.fromCharCode(b)); return btoa(bin); }
+function buildRawEmail({ from, fromName, to, toName, subject, body }){
+  const addr = (name, email) => name ? `=?UTF-8?B?${b64utf8(name)}?= <${email}>` : email;
+  const msg = [
+    `From: ${addr(fromName, from)}`, `To: ${addr(toName, to)}`, `Subject: =?UTF-8?B?${b64utf8(subject)}?=`,
+    'MIME-Version: 1.0', 'Content-Type: text/plain; charset=UTF-8', 'Content-Transfer-Encoding: base64', '',
+    b64utf8(body).replace(/.{76}/g, '$&\r\n')
+  ].join('\r\n');
+  return btoa(msg).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+async function gmailSend(mail){
+  const token = await getGmailToken();
+  const r = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+    method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify({ raw: buildRawEmail(mail) })
+  });
+  if (!r.ok){
+    let m = ''; try { m = (await r.json()).error.message; } catch(e){}
+    if (r.status === 401) gmailToken = null;
+    throw new Error('Gmail couldn’t send it' + (m ? ': ' + m : '') + (r.status === 403 ? '. Check that the Gmail API is turned on in Google Cloud.' : ''));
+  }
+  return r.json();
+}
+
+function firstName(l){ return (l.name || '').trim().split(/\s+/)[0] || 'there'; }
+function myName(){ return currentUser && currentUser.name ? currentUser.name : '[Your name]'; }
+function meetText(l){ return fmtMeeting(l.meeting).replace(/^(Today|Tomorrow|Yesterday)/, m => m.toLowerCase()); }
+function meetLine(l){
+  const m = meetingDate(l); if (!m) return '';
+  return m > new Date() ? `I have us down for ${meetText(l)}. Does that still work for you?\n\n` : `I know we had planned to talk ${meetText(l)}. I'd love to find a new time that works for you.\n\n`;
+}
+const TEMPLATES = [
+  l => ({ subject: `Great connecting${l.company ? ' – ' + l.company : ''}`,
+    body: `Hi ${firstName(l)},\n\nIt was great connecting with you. I wanted to follow up and see how I can help${l.company ? ' ' + l.company : ''}.\n\n${meetLine(l)}${meetingDate(l) ? '' : 'Would you have 15 minutes this week for a quick call?\n\n'}Best,\n${myName()}` }),
+  l => ({ subject: `Following up${l.notes ? '' : ' on our conversation'}`,
+    body: `Hi ${firstName(l)},\n\nThanks again for your time. ${l.notes ? `I'm following up on this: ${l.notes.split('\n')[0]}.` : 'I wanted to follow up on our conversation.'}\n\n${meetLine(l) || 'What does your schedule look like for a quick call?\n\n'}Looking forward to hearing from you,\n${myName()}` }),
+  l => ({ subject: `Quick question${l.company ? ' for ' + l.company : ''}`,
+    body: `Hi ${firstName(l)},\n\nJust checking in. ${meetLine(l) ? meetLine(l).trim() : 'Is there a good time to connect this week?'}\n\nThanks,\n${myName()}` })
+];
+async function aiDraft(l, extra, remake){
+  const sys = `You write short, professional sales follow-up emails. Reply in exactly this format:\nSubject: <subject line>\n\n<email body>\nAddress the recipient by first name. Keep the body under 120 words. End with "Best," and then this name on its own line: ${myName()}. Only use facts given to you. Never invent prices, products, dates or promises.`;
+  const now = new Date();
+  const facts = [
+    `Recipient: ${who(l)}`,
+    l.meeting ? `Meeting or call: ${fmtMeeting(l.meeting)}${meetingDate(l) < now ? ' (this already passed, so suggest rescheduling)' : ''}` : 'No meeting scheduled yet, so suggest a quick call.',
+    l.notes ? `My notes about them: ${l.notes.slice(0, 400)}` : '',
+    extra ? `What I asked for: ${extra}` : '',
+    remake ? 'Write a different version from before, with a new subject line.' : ''
+  ].filter(Boolean).join('\n');
+  const out = String(await aiComplete([{ role: 'system', content: sys }, { role: 'user', content: facts }], { temperature: remake ? 0.9 : 0.4 }));
+  const m = out.match(/subject\s*:\s*\**\s*(.+)\n([\s\S]+)/i);
+  const clean = t => t.replace(/\[your name\]/gi, myName()).trim();
+  if (!m) return { subject: `Following up${l.company ? ' – ' + l.company : ''}`, body: clean(out) };
+  return { subject: m[1].replace(/^["*\s]+|["*\s]+$/g, ''), body: clean(m[2]) };
+}
+
+function scrollChat(){ const c = $('#chat'); c.scrollTop = c.scrollHeight; }
+async function startEmail(l, extra){
+  openDrawer();
+  if (!l.email){ addMsg('ai', `${l.name || 'This lead'} doesn’t have an email address saved. Open the lead, add one with Edit, then try again.`); return; }
+  const card = el('div', { class: 'msg ai mail' });
+  $('#chat').append(card);
+  await makeDraft(l, card, extra, false);
+}
+async function makeDraft(l, card, extra, remake){
+  card.replaceChildren(el('div', { class: 'muted' }, AI.ready ? 'Writing a draft…' : 'Preparing a draft…'));
+  scrollChat();
+  let d;
+  try { d = AI.ready ? await aiDraft(l, extra, remake) : TEMPLATES[(tplIndex++) % TEMPLATES.length](l); }
+  catch(e){ d = TEMPLATES[(tplIndex++) % TEMPLATES.length](l); }
+  showDraft(l, card, d);
+}
+function showDraft(l, card, d, editing = false){
+  const sub = editing ? el('input', { class: 'mi', value: d.subject }) : el('div', { class: 'msub' }, d.subject);
+  const body = editing ? el('textarea', { class: 'mi mb' }) : el('div', { class: 'mbody' }, d.body);
+  if (editing) body.value = d.body;
+  const btns = editing
+    ? [el('button', { class: 'primary sm', onclick: () => { d.subject = sub.value.trim(); d.body = body.value.trim(); showDraft(l, card, d); } }, 'Save changes'),
+       el('button', { class: 'sm', onclick: () => showDraft(l, card, d) }, 'Cancel')]
+    : [el('button', { class: 'primary sm', onclick: () => confirmSend(l, card, d) }, 'Looks good'),
+       el('button', { class: 'sm', onclick: () => showDraft(l, card, d, true) }, ic('edit'), 'Edit'),
+       el('button', { class: 'sm', onclick: () => makeDraft(l, card, null, true) }, ic('refresh'), 'Remake')];
+  card.replaceChildren(
+    el('div', { class: 'mlabel' }, `Draft to ${l.name || l.email}. Does this look right?`),
+    el('div', { class: 'mhead' }, 'Subject'), sub,
+    el('div', { class: 'mhead' }, 'Message'), body,
+    el('div', { class: 'mbtns' }, ...btns));
+  if (editing) body.style.height = Math.min(320, Math.max(140, body.scrollHeight + 4)) + 'px';
+  scrollChat();
+}
+function confirmSend(l, card, d){
+  if (!d.subject || !d.body){ toast('Add a subject and a message first'); return; }
+  if (currentUser && currentUser.name) d.body = d.body.replace(/\[your name\]/gi, currentUser.name);
+  const btnRow = card.querySelector('.mbtns'); if (btnRow) btnRow.remove();
+  const box = el('div', { class: 'msg ai mail confirm' });
+  $('#chat').append(box);
+  const back = () => { box.remove(); showDraft(l, card, d); };
+  const mailto = el('a', { class: 'mlink', href: `mailto:${encodeURIComponent(l.email)}?subject=${encodeURIComponent(d.subject)}&body=${encodeURIComponent(d.body)}` }, 'Open in my email app instead');
+  if (!currentUser){
+    box.replaceChildren(
+      el('div', { class: 'mlabel' }, 'To send from your Gmail, sign in with Google first.'),
+      el('div', { class: 'mbtns' },
+        el('button', { class: 'primary sm', onclick: async () => { await signIn(); if (currentUser){ box.remove(); confirmSend(l, card, d); } } }, 'Sign in with Google'),
+        el('button', { class: 'sm', onclick: back }, 'Go back')), mailto);
+    scrollChat(); return;
+  }
+  const send = el('button', { class: 'primary sm' }, ic('send'), 'Send email');
+  send.addEventListener('click', async () => {
+    send.disabled = true; send.lastChild.textContent = 'Sending…';
+    box.querySelectorAll('.merr').forEach(e => e.remove());
+    try {
+      await gmailSend({ from: currentUser.email, fromName: currentUser.name, to: l.email, toName: l.name, subject: d.subject, body: d.body });
+      box.replaceChildren(el('div', { class: 'msent' }, `✓ Sent to ${l.email} from ${currentUser.email}.`), el('div', { class: 'muted' }, 'I added a note to this lead so you know it was sent.'));
+      const fresh = leads.find(x => x.id === l.id) || l;
+      const note = `${new Date().toLocaleDateString()}: emailed "${d.subject}"`;
+      fresh.notes = fresh.notes ? fresh.notes + '\n' + note : note; fresh.updated = Date.now();
+      await dbPut(fresh); await load();
+    } catch(e){
+      send.disabled = false; send.lastChild.textContent = 'Try again';
+      box.append(el('div', { class: 'merr' }, e.message));
+    }
+    scrollChat();
+  });
+  box.replaceChildren(
+    el('div', { class: 'mlabel' }, 'Ready to send. Please check these before you confirm:'),
+    el('div', { class: 'kv' }, el('b', {}, 'From: '), currentUser.email),
+    el('div', { class: 'kv' }, el('b', {}, 'To: '), (l.name ? l.name + ' ' : '') + `<${l.email}>`),
+    el('div', { class: 'kv' }, el('b', {}, 'Subject: '), d.subject),
+    el('div', { class: 'mbtns' }, send, el('button', { class: 'sm', onclick: back }, 'Go back')), mailto);
+  scrollChat();
+}
+
+// Figure out which lead a typed request is about ("send a follow up to Dana").
+function findLeadInText(t){
+  const s = ' ' + t.toLowerCase().replace(/[^a-z0-9@.\s'-]/g, ' ') + ' ';
+  let best = null, score = 0;
+  const word = w => w && w.length > 2 && s.includes(' ' + w + ' ');
+  for (const l of leads){
+    const n = (l.name || '').toLowerCase().trim(), parts = n.split(/\s+/), co = (l.company || '').toLowerCase().trim();
+    let sc = 0;
+    if (n && s.includes(n)) sc = 100 + n.length;
+    else if (l.email && s.includes(l.email.toLowerCase())) sc = 90;
+    else if (co.length > 3 && s.includes(co)) sc = 50 + co.length;
+    else if (word(parts[parts.length - 1]) && parts.length > 1) sc = 20 + parts[parts.length - 1].length;
+    else if (word(parts[0])) sc = 10 + parts[0].length;
+    if (sc > score){ score = sc; best = l; }
+  }
+  return best;
+}
+function pickLeadToEmail(extra){
+  const g = leadGroups(), list = [...g.overdue, ...g.soon, ...g.nomeet, ...g.later].filter(l => l.email).slice(0, 8);
+  if (!list.length){ addMsg('ai', 'None of your open leads have an email address saved yet.'); return; }
+  const box = el('div', { class: 'msg ai mail' }, el('div', { class: 'mlabel' }, 'Who should I write to?'),
+    el('div', { class: 'picks' }, ...list.map(l => el('button', { class: 'sm', onclick: () => { box.remove(); addMsg('user', l.name || l.email); startEmail(l, extra); } }, l.name || l.email))));
+  $('#chat').append(box); scrollChat();
+}
+const EMAIL_INTENT = /\b(e-?mail|follow[\s-]?up|reach out|write to|send)\b/i;
+function draftEmail(l){ startEmail(l); }
 async function aiImproveDraft(d){
   const sys = 'You read OCR text from a business card or trade-show lead card. OCR text can have mistakes; fix obvious ones. Reply with ONLY a JSON object with these keys: name, company, title, email, phone, website. Use "" for anything not on the card. Never make up details.';
   const reply = await aiComplete([{ role: 'system', content: sys }, { role: 'user', content: (d.raw || '').slice(0, 1500) }], { json: true });
@@ -1044,7 +1293,8 @@ $('#btnCloseDrawer').addEventListener('click', () => $('#drawer').classList.remo
 $('#btnAiStart').addEventListener('click', aiStart);
 $('#btnSend').addEventListener('click', () => { const v = $('#chatInput').value; $('#chatInput').value = ''; sendChat(v); });
 $('#chatInput').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); $('#btnSend').click(); } });
-$$('#chips button').forEach(b => b.addEventListener('click', () => sendChat(b.dataset.q)));
+$('#chipEmail').addEventListener('click', () => { addMsg('user', 'Send a follow-up'); pickLeadToEmail(''); });
+$$('#chips button[data-kind]').forEach(b => b.addEventListener('click', () => { addMsg('user', b.textContent); addMsg('ai', quickAnswer(b.dataset.kind)); }));
 $('#btnNewChat').addEventListener('click', () => { chatHistory = []; $('#chat').replaceChildren(); if (AI.ready) showChat(); });
 
 /* ---------------- Calendar, export, backup ---------------- */
@@ -1333,4 +1583,3 @@ setInterval(render, 60 * 1000);
 </script>
 </body>
 </html>
-
