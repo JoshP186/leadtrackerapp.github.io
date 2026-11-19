@@ -6,6 +6,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="LeadTracker">
 <meta name="theme-color" content="#ffffff">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: https://cdn.jsdelivr.net https://esm.run https://accounts.google.com; worker-src 'self' blob: https://cdn.jsdelivr.net; connect-src 'self' https: data: blob:; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline' https://accounts.google.com; frame-src https://accounts.google.com; font-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<style id="antiClickjack">body{display:none!important}</style>
 <title>LeadTracker</title>
 <style>
   :root{
@@ -349,6 +352,10 @@
 
 <script>
 'use strict';
+// Security: refuse to run inside another website's frame (stops clickjacking tricks on buttons like "Send email").
+if (window.self === window.top){ document.getElementById('antiClickjack').remove(); }
+else { try { window.top.location = window.self.location.href; } catch(e){} throw new Error('LeadTracker was loaded inside another site; stopped.'); }
+
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 
@@ -399,8 +406,33 @@ function tx(mode, fn){
   }));
 }
 const dbAll = () => tx('readonly', s => s.getAll());
+/* Security: every lead is cleaned before it is saved or shown, whether it came from a scan,
+   a backup file or Google Drive. Limits sizes, removes hidden control characters and rejects bad values. */
+const EMAIL_STRICT = /^[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9-]{1,63}(\.[A-Za-z0-9-]{1,63})*\.[A-Za-z]{2,24}$/;
+const isEmail = e => typeof e === 'string' && e.length <= 254 && EMAIL_STRICT.test(e);
+const CARD_TYPES = ['Business card', 'Lead card', 'Other'];
+function cleanText(v, max, multiline){
+  if (v == null || typeof v === 'object' || typeof v === 'function') return '';
+  let t = String(v).replace(multiline ? /[\u0000-\u0009\u000B-\u001F\u007F\u2028\u2029]/g : /[\u0000-\u001F\u007F\u2028\u2029]/g, multiline ? '' : ' ');
+  return t.trim().slice(0, max);
+}
+function sanitizeLead(l){
+  if (!l || typeof l !== 'object') return null;
+  const id = typeof l.id === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(l.id) && l.id !== '__proto__' ? l.id : null;
+  if (!id) return null;
+  const now = Date.now(), num = v => (Number.isFinite(+v) && +v > 0 ? Math.min(+v, now + 864e5) : 0);
+  const meeting = typeof l.meeting === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(l.meeting) && !isNaN(new Date(l.meeting)) ? l.meeting : '';
+  const image = typeof l.image === 'string' && l.image.length < 3e6 && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+=*$/.test(l.image) ? l.image : null;
+  return {
+    id, name: cleanText(l.name, 120), company: cleanText(l.company, 160), title: cleanText(l.title, 160),
+    email: cleanText(l.email, 254).replace(/\s+/g, ''), phone: cleanText(l.phone, 40), website: cleanText(l.website, 300),
+    cardType: CARD_TYPES.includes(l.cardType) ? l.cardType : 'Business card',
+    meeting, notes: cleanText(l.notes, 4000, true), done: l.done === true, image,
+    created: num(l.created) || now, updated: num(l.updated) || num(l.created) || now
+  };
+}
 const dbAllRaw = dbAll;
-const dbPutRaw = lead => tx('readwrite', s => s.put(lead));
+const dbPutRaw = lead => { const c = sanitizeLead(lead); if (!c) return Promise.resolve(); return tx('readwrite', s => s.put(c)); };
 const dbDelRaw = id => tx('readwrite', s => s.delete(id));
 // Every change made in the app also gets queued for syncing to Google Drive.
 async function dbPut(lead){ await dbPutRaw(lead); if (tombstones[lead.id]){ delete tombstones[lead.id]; lsSet('leadsnap.deleted', tombstones); } scheduleSync(); }
@@ -513,7 +545,7 @@ function leadRow(l, now){
     el('div', { class: 'cell c-name' }, el('div', { class: 'nm' }, l.name || 'Unnamed lead'), l.title ? el('div', { class: 'sub' }, l.title) : null),
     el('div', { class: 'cell c-company sub' }, l.company || ''),
     el('div', { class: 'cell c-contact' },
-      l.email ? el('a', { href: 'mailto:' + l.email }, ic('mail'), l.email) : null,
+      l.email ? (isEmail(l.email) ? el('a', { href: 'mailto:' + encodeURIComponent(l.email) }, ic('mail'), l.email) : el('span', { class: 'sub', title: 'This doesn’t look like a valid email address' }, ic('mail'), l.email)) : null,
       l.phone ? el('a', { href: 'tel:' + l.phone.replace(/[^\d+]/g, '') }, ic('phone'), l.phone) : null),
     el('div', { class: 'cell c-meet' }, md ? el('span', { class: 'meet' }, ic('calendar'), fmtMeeting(l.meeting)) : ''),
     el('div', { class: 'cell c-tags tags' },
@@ -700,13 +732,15 @@ async function processFiles(files, multi){
     const worker = await getOcr();
     for (let fi = 0; fi < files.length && !reviewCancelled; fi++){
       const f = files[fi];
+      if (f.size > 50 * 1024 * 1024){ problems.push(f.name + ' (over 50 MB)'); continue; }
       const isPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
       let pages = [];
       try {
         if (isPdf){
           status(`Opening ${f.name}…`);
           const lib = await getPdfjs();
-          const doc = await lib.getDocument({ data: new Uint8Array(await f.arrayBuffer()) }).promise;
+          const doc = await lib.getDocument({ data: new Uint8Array(await f.arrayBuffer()), isEvalSupported: false, enableXfa: false }).promise;
+          if (doc.numPages > 60){ problems.push(f.name + ' (more than 60 pages)'); continue; }
           for (let p = 1; p <= doc.numPages; p++) pages.push({ label: `${f.name}, page ${p}`, get: async () => {
             const page = await doc.getPage(p), v1 = page.getViewport({ scale: 1 });
             const scale = Math.min(5, (multi ? 3300 : 2600) / Math.max(v1.width, v1.height)), vp = page.getViewport({ scale });
@@ -1122,6 +1156,11 @@ async function getGmailToken(){
 }
 function b64utf8(s){ const bytes = new TextEncoder().encode(s); let bin = ''; bytes.forEach(b => bin += String.fromCharCode(b)); return btoa(bin); }
 function buildRawEmail({ from, fromName, to, toName, subject, body }){
+  // Security: refuse bad addresses and remove line breaks so nothing can sneak in extra recipients (Bcc/Cc).
+  if (!isEmail(from) || !isEmail(to)) throw new Error('That email address doesn’t look valid, so the email was not sent.');
+  const oneLine = t => String(t || '').replace(/[\r\n\u0000-\u001F\u007F\u2028\u2029]+/g, ' ').trim().slice(0, 250);
+  fromName = oneLine(fromName); toName = oneLine(toName); subject = oneLine(subject);
+  body = String(body || '').slice(0, 20000);
   const addr = (name, email) => name ? `=?UTF-8?B?${b64utf8(name)}?= <${email}>` : email;
   const msg = [
     `From: ${addr(fromName, from)}`, `To: ${addr(toName, to)}`, `Subject: =?UTF-8?B?${b64utf8(subject)}?=`,
@@ -1178,6 +1217,7 @@ async function aiDraft(l, extra, remake){
 function scrollChat(){ const c = $('#chat'); c.scrollTop = c.scrollHeight; }
 async function startEmail(l, extra){
   openDrawer();
+  if (l.email && !isEmail(l.email)){ addMsg('ai', `${l.name || 'This lead'}’s email address (${l.email}) doesn’t look valid. Fix it with Edit, then try again.`); return; }
   if (!l.email){ addMsg('ai', `${l.name || 'This lead'} doesn’t have an email address saved. Open the lead, add one with Edit, then try again.`); return; }
   const card = el('div', { class: 'msg ai mail' });
   $('#chat').append(card);
@@ -1211,6 +1251,7 @@ function showDraft(l, card, d, editing = false){
 }
 function confirmSend(l, card, d){
   if (!d.subject || !d.body){ toast('Add a subject and a message first'); return; }
+  if (!isEmail(l.email)){ toast('This lead’s email address doesn’t look valid. Fix it with Edit first.'); return; }
   if (currentUser && currentUser.name) d.body = d.body.replace(/\[your name\]/gi, currentUser.name);
   const btnRow = card.querySelector('.mbtns'); if (btnRow) btnRow.remove();
   const box = el('div', { class: 'msg ai mail confirm' });
@@ -1319,7 +1360,9 @@ function downloadBlob(blob, name){
 function closeMenu(){ $('#moreMenu').open = false; }
 function buildCsv(){
   const cols = ['Name','Company','Title','Email','Phone','Website','Card type','Next meeting or call','Done','Status','Notes','Date added'];
-  const q = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+  // Security: text that starts like a formula (=, +, -, @) is made plain text so Sheets/Excel won't run it.
+  const safe = v => { let t = String(v ?? ''); if (/^[=@\t\r]/.test(t) || (/^[+-]/.test(t) && !/^[+-]?[\s(]*\d[\d\s().-]*$/.test(t))) t = "'" + t; return t; };
+  const q = v => '"' + safe(v).replace(/"/g, '""') + '"';
   const label = { done: 'Done', soon: 'Coming up', overdue: 'Overdue', open: 'Open' };
   const rows = leads.slice().sort(SORTS[settings.sort] || SORTS.soonest).map(l => [l.name, l.company, l.title, l.email, l.phone, l.website, l.cardType,
     l.meeting ? new Date(l.meeting).toLocaleString() : '', l.done ? 'TRUE' : 'FALSE', label[leadStatus(l)], l.notes,
@@ -1339,10 +1382,13 @@ $('#btnRestore').addEventListener('click', () => { closeMenu(); $('#fileRestore'
 $('#fileRestore').addEventListener('change', async e => {
   const f = e.target.files[0]; e.target.value = '';
   if (!f) return;
+  if (f.size > 200 * 1024 * 1024){ toast('That backup file is too large'); return; }
   try {
     const data = JSON.parse(await f.text());
-    const list = Array.isArray(data) ? data : data.leads;
+    let list = Array.isArray(data) ? data : data.leads;
     if (!Array.isArray(list)) throw new Error('bad file');
+    list = list.slice(0, 20000).map(sanitizeLead).filter(Boolean);
+    if (!list.length) throw new Error('bad file');
     if (!confirm(`Add ${list.length} leads from this backup? Leads that already exist will be replaced by the backup copy.`)) return;
     const now = Date.now();
     for (const l of list) if (l && l.id) await dbPut(Object.assign({}, l, { updated: now }));
@@ -1436,10 +1482,13 @@ async function syncNow(interactive){
     let remote = { leads: [], deleted: {} };
     if (fileId){ try { remote = await (await gfetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`)).json() || remote; } catch(e){ if (e.message === 'auth') throw e; } }
     const local = await dbAllRaw();
-    const tomb = Object.assign({}, remote.deleted || {});
+    const tomb = Object.assign(Object.create(null), remote.deleted);
     for (const [id, t] of Object.entries(tombstones)) tomb[id] = Math.max(tomb[id] || 0, t);
     const best = new Map();
-    for (const l of [...(remote.leads || []), ...local]){
+    const remoteLeads = Array.isArray(remote.leads) ? remote.leads.slice(0, 20000).map(sanitizeLead).filter(Boolean) : [];
+    if (!remote.deleted || typeof remote.deleted !== 'object' || Array.isArray(remote.deleted)) remote.deleted = {};
+    for (const k of Object.keys(remote.deleted)) if (!/^[A-Za-z0-9_-]{1,64}$/.test(k) || !Number.isFinite(+remote.deleted[k])) delete remote.deleted[k];
+    for (const l of [...remoteLeads, ...local]){
       if (!l || !l.id) continue;
       const cur = best.get(l.id);
       if (!cur || stamp(l) > stamp(cur)) best.set(l.id, l);
@@ -1543,7 +1592,7 @@ async function openInSheets(){
       syncState.sheetId = id; lsSet('leadsnap.sync', syncState);
     }
     const url = `https://docs.google.com/spreadsheets/d/${id}/edit`;
-    if (win) win.location.href = url; else window.open(url, '_blank');
+    if (win){ win.opener = null; win.location.href = url; } else window.open(url, '_blank', 'noopener');
     toast('Your Google Sheet is up to date');
   } catch(e){
     if (win) win.close();
@@ -1575,7 +1624,7 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 let toastTimer;
 function toast(msg){ const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2400); }
 async function load(){
-  try { leads = await dbAll(); } catch(e){ leads = []; toast('This browser is blocking storage (private mode?)'); }
+  try { leads = (await dbAll()).map(sanitizeLead).filter(Boolean); } catch(e){ leads = []; toast('This browser is blocking storage (private mode?)'); }
   render();
 }
 renderUser(); load().then(() => { if (currentUser && tokenValid()) syncNow(false); });
